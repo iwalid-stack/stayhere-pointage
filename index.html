@@ -2637,13 +2637,16 @@ const App = {
       await loadAll();
       this.closeModal();
 
-      const d = json.deleted;
+      const d = (typeof json.deleted === 'object' && json.deleted !== null)
+        ? json.deleted
+        : { userProfiles: 0, authAccounts: 0, employees: 0 };
       const msg = [
-        `✅ ${d.userProfiles} compte(s) de connexion supprimé(s)`,
-        `🔐 ${d.authAccounts} compte(s) Supabase Auth supprimé(s)`,
-        keepHistory ? `📦 Historique conservé` : `🗑 ${d.employees} employé(s) désactivé(s)`,
+        `✅ ${d.userProfiles ?? 0} compte(s) de connexion supprimé(s)`,
+        `🔐 ${d.authAccounts ?? 0} compte(s) Supabase Auth supprimé(s)`,
+        keepHistory ? `📦 Historique conservé` : `🗑 ${d.employees ?? 0} employé(s) désactivé(s)`,
+        json.message ? `\nℹ️ ${json.message}` : '',
         `\nVous pouvez maintenant importer la nouvelle liste via 📥 Importer Excel.`,
-      ].join('\n');
+      ].filter(Boolean).join('\n');
       alert(msg);
       this.renderCollaborateurs();
     } catch(e) {
