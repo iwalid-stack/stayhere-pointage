@@ -1172,26 +1172,30 @@ const App = {
   async start() {
     initSB();
     this.showLoading('Connexion à la base de données...');
+
+    // ── Restaurer session Supabase Auth ──────────────────────
+    const { data: { session: sbSession } } = await SB.auth.getSession();
+    if (sbSession?.user) {
+      // Récupérer le profil applicatif depuis sh_user_profiles
+      try {
+        const { data: profile } = await SB.from('sh_user_profiles').select('*').eq('id', sbSession.user.id).single();
+        if (profile && profile.acces_principal !== false) {
+          currentSession = { ...profile };
+        }
+      } catch { currentSession = null; }
+    }
+
+    if (!currentSession) {
+      this.showLogin(); return;
+    }
+
     try {
       await loadAll();
     } catch(e) {
       this.showError('Impossible de se connecter à la base de données. Vérifiez votre connexion internet.<br><small style="opacity:0.7">'+e.message+'</small>');
       return;
     }
-    try {
-      const saved = localStorage.getItem('sh_session');
-      if (saved) currentSession = JSON.parse(saved);
-    } catch { currentSession = null; }
-    // Sync session with fresh DB data (picks up role/affectation changes made by admin)
-    if(currentSession?.id) {
-      const freshUser = Cache.users.find(u=>u.id===currentSession.id);
-      if(freshUser) {
-        currentSession = freshUser;
-        localStorage.setItem('sh_session', JSON.stringify(freshUser));
-      }
-    }
-    if (currentSession?.id) { this.showApp(); this.setupRealtime(); _initSessionWatcher(); }
-    else { this.showLogin(); }
+    this.showApp(); this.setupRealtime(); _initSessionWatcher();
   },
 
   showError(msg) {
@@ -1227,20 +1231,50 @@ const App = {
     </div></div>`;
     document.getElementById('login-form').addEventListener('submit', async e => {
       e.preventDefault();
-      const username=document.getElementById('un').value.trim();
-      const password=document.getElementById('pw').value;
-      const hash=await sha256(password);
-      const user=DB.getUserByHash(username,hash);
-      if(user) {
-        currentSession=user;
-        localStorage.setItem('sh_session',JSON.stringify(user));
+      const username = document.getElementById('un').value.trim().toLowerCase();
+      const password = document.getElementById('pw').value;
+      const errEl = document.getElementById('login-error');
+      const btn = document.querySelector('#login-form button[type=submit]');
+      if(btn) { btn.textContent = 'Connexion...'; btn.disabled = true; }
+
+      try {
+        // ── Supabase Auth (email convention : username@stayhere.internal) ──
+        const email = username + '@stayhere.internal';
+        const { data, error } = await SB.auth.signInWithPassword({ email, password });
+
+        if (error || !data?.user) {
+          errEl.textContent = 'Identifiant ou mot de passe incorrect.';
+          errEl.classList.remove('hidden');
+          if(btn) { btn.textContent = 'Se connecter'; btn.disabled = false; }
+          return;
+        }
+
+        // Récupérer le profil applicatif
+        const { data: profile, error: profErr } = await SB.from('sh_user_profiles').select('*').eq('id', data.user.id).single();
+        if (profErr || !profile) {
+          errEl.textContent = 'Profil utilisateur introuvable. Contactez l\'administrateur.';
+          errEl.classList.remove('hidden');
+          await SB.auth.signOut();
+          if(btn) { btn.textContent = 'Se connecter'; btn.disabled = false; }
+          return;
+        }
+        if (profile.acces_principal === false) {
+          errEl.textContent = 'Vous n\'avez pas accès à cette application.';
+          errEl.classList.remove('hidden');
+          await SB.auth.signOut();
+          if(btn) { btn.textContent = 'Se connecter'; btn.disabled = false; }
+          return;
+        }
+
+        currentSession = { ...profile };
+        await loadAll();
         this.showApp();
         this.setupRealtime();
         _initSessionWatcher();
-      } else {
-        const err=document.getElementById('login-error');
-        err.textContent='Identifiant ou mot de passe incorrect.';
-        err.classList.remove('hidden');
+      } catch(err) {
+        errEl.textContent = 'Erreur de connexion : ' + err.message;
+        errEl.classList.remove('hidden');
+        if(btn) { btn.textContent = 'Se connecter'; btn.disabled = false; }
       }
     });
   },
@@ -2984,7 +3018,28 @@ const App = {
   },
 
   openChangePwd(id){this.showModal(`<div class="modal-header"><div class="modal-title">Changer le mot de passe</div><button class="modal-close" onclick="App.closeModal()">✕</button></div><div class="form-group"><label>Nouveau mot de passe</label><input id="pw1" type="password"></div><div class="form-group"><label>Confirmer</label><input id="pw2" type="password"></div><div class="modal-actions"><button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button><button class="btn btn-primary" onclick="App.savePwd('${id}')">Enregistrer</button></div>`);},
-  async savePwd(id){const p1=document.getElementById('pw1').value;const p2=document.getElementById('pw2').value;if(!p1){alert('Requis.');return;}if(p1!==p2){alert('Les mots de passe ne correspondent pas.');return;}const hash=await sha256(p1);await DB.updateUserPassword(id,hash);this.closeModal();alert('Mot de passe modifié.');},
+  async savePwd(id){
+    const p1=document.getElementById('pw1').value;
+    const p2=document.getElementById('pw2').value;
+    if(!p1){alert('Requis.');return;}
+    if(p1.length<6){alert('Minimum 6 caractères.');return;}
+    if(p1!==p2){alert('Les mots de passe ne correspondent pas.');return;}
+    // Trouver le username de l'utilisateur cible
+    const targetUser = Cache.users.find(u=>u.id===id);
+    if(!targetUser){alert('Utilisateur introuvable.');return;}
+    try {
+      const {data:{session:sbSess}} = await SB.auth.getSession();
+      const res = await fetch(`${SB_URL}/functions/v1/admin-reset-password`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':`Bearer ${sbSess?.access_token}`,'apikey':SB_KEY},
+        body:JSON.stringify({targetUsername:targetUser.username,newPassword:p1})
+      });
+      const json = await res.json();
+      if(!res.ok||!json.ok) throw new Error(json.error||`Erreur ${res.status}`);
+      this.closeModal();
+      alert('✓ Mot de passe modifié avec succès.');
+    } catch(e){alert('Erreur : '+e.message);}
+  },
   async deleteUser(id){if(!confirm('Supprimer ?'))return;await DB.deleteUser(id);this.renderUtilisateurs();},
 
   // ---- PARAMÈTRES ----
@@ -3461,9 +3516,9 @@ const App = {
   closeModal(){document.getElementById('modal-overlay')?.remove();this._saisieType=null;},
 
   // ---- LOGOUT ----
-  logout(){
+  async logout(){
     if(_sessionTimer){clearTimeout(_sessionTimer);_sessionTimer=null;}
-    localStorage.removeItem('sh_session');
+    await SB.auth.signOut();
     currentSession=null;
     this.currentPage='planning';
     this.showLogin();

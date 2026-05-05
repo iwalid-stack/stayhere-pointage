@@ -356,8 +356,16 @@ const ClockApp = {
       return;
     }
 
-    // Restore session
-    try { const s=localStorage.getItem('sh_clock_session'); if(s) session=JSON.parse(s); } catch {}
+    // ── Restaurer session Supabase Auth ──────────────────────
+    const { data: { session: sbSession } } = await SB.auth.getSession();
+    if (sbSession?.user) {
+      try {
+        const { data: profile } = await SB.from('sh_user_profiles').select('*').eq('id', sbSession.user.id).single();
+        if (profile?.acces_horloge) {
+          session = { ...profile, _sbSession: sbSession };
+        }
+      } catch { session = null; }
+    }
 
     if(session?.id) {
       await this.loadData(true);
@@ -407,38 +415,44 @@ const ClockApp = {
   },
 
   async login() {
-    const username = (document.getElementById('un')?.value||'').trim();
+    const username = (document.getElementById('un')?.value||'').trim().toLowerCase();
     const password = document.getElementById('pw')?.value||'';
     if(!username||!password) return;
 
     const btn = document.querySelector('.btn-login');
+    const errEl = document.getElementById('login-err');
     if(btn) { btn.textContent='Connexion...'; btn.disabled=true; }
 
-    const hash = await sha256(password);
-
     try {
-      const {data:users,error} = await SB.from('sh_users').select('*');
-      if(error) throw error;
+      // ── Supabase Auth ──────────────────────────────────────
+      const email = username + '@stayhere.internal';
+      const { data, error } = await SB.auth.signInWithPassword({ email, password });
 
-      const user = (users||[]).find(u=>u.username.toLowerCase()===username.toLowerCase()&&u.password_hash===hash)||null;
-      const errEl = document.getElementById('login-err');
-
-      if(!user) {
+      if (error || !data?.user) {
         if(errEl){errEl.textContent='Identifiant ou mot de passe incorrect.';errEl.style.display='block';}
         if(btn){btn.textContent='Se connecter';btn.disabled=false;}
         return;
       }
-      if(user.acces_horloge===false) {
+
+      // Récupérer le profil applicatif
+      const { data: profile, error: profErr } = await SB.from('sh_user_profiles').select('*').eq('id', data.user.id).single();
+
+      if (profErr || !profile) {
+        if(errEl){errEl.textContent='Profil introuvable. Contactez votre administrateur.';errEl.style.display='block';}
+        await SB.auth.signOut();
+        if(btn){btn.textContent='Se connecter';btn.disabled=false;}
+        return;
+      }
+      if (!profile.acces_horloge) {
         if(errEl){errEl.textContent='Vous n\'avez pas accès à l\'application de pointage mobile. Contactez votre administrateur.';errEl.style.display='block';}
+        await SB.auth.signOut();
         if(btn){btn.textContent='Se connecter';btn.disabled=false;}
         return;
       }
 
-      session = user;
-      localStorage.setItem('sh_clock_session', JSON.stringify(user));
+      session = { ...profile, _sbSession: data.session };
       await this.loadData(false);
     } catch(e) {
-      const errEl=document.getElementById('login-err');
       if(errEl){errEl.textContent='Erreur de connexion : '+e.message;errEl.style.display='block';}
       if(btn){btn.textContent='Se connecter';btn.disabled=false;}
     }
@@ -448,11 +462,12 @@ const ClockApp = {
     if(!quiet) this.showLoading('Chargement des données...');
 
     try {
-      // Re-validate session and check access
-      const {data:users} = await SB.from('sh_users').select('*').eq('id',session.id);
-      if(!users?.length) { session=null; localStorage.removeItem('sh_clock_session'); this.showLogin(); return; }
-      session = users[0];
-      localStorage.setItem('sh_clock_session', JSON.stringify(session));
+      // Re-validate session via Supabase Auth
+      const { data: { user: sbUser } } = await SB.auth.getUser();
+      if (!sbUser) { session=null; await SB.auth.signOut(); this.showLogin(); return; }
+      const { data: freshProfile } = await SB.from('sh_user_profiles').select('*').eq('id', sbUser.id).single();
+      if (!freshProfile) { session=null; await SB.auth.signOut(); this.showLogin(); return; }
+      session = { ...freshProfile };
 
       if(session.acces_horloge===false) { this.showNoAccess(); return; }
 
@@ -733,6 +748,26 @@ const ClockApp = {
   },
 
   // ---- SHIFT ACTIONS ----
+  // ── Helper : appel Edge Function avec JWT Supabase Auth ─────
+  async _callClockAction(action, extraBody={}) {
+    const { data: { session: sbSess } } = await SB.auth.getSession();
+    if (!sbSess?.access_token) throw new Error('Session expirée. Reconnectez-vous.');
+
+    const res = await fetch(`${SB_URL}/functions/v1/clock-action`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${sbSess.access_token}`,
+        'apikey': SB_KEY,
+      },
+      body: JSON.stringify({ action, ...extraBody }),
+    });
+
+    const json = await res.json();
+    if (!res.ok || !json.ok) throw new Error(json.error || `Erreur ${res.status}`);
+    return json;
+  },
+
   async startShift() {
     if(!employee) { alert('Aucun profil collaborateur associé à votre compte. Contactez votre administrateur.'); return; }
 
@@ -742,52 +777,38 @@ const ClockApp = {
       return;
     }
 
-    // Vérification géolocalisation
+    // Obtenir la position GPS pour la valider CÔTÉ SERVEUR
     const btnArea = document.querySelector('.btn-area');
     const origHTML = btnArea ? btnArea.innerHTML : '';
     if(btnArea) btnArea.innerHTML = `<div style="text-align:center;color:rgba(255,255,255,0.45);font-size:13px;padding:24px 0;display:flex;align-items:center;justify-content:center;gap:10px"><div class="spinner" style="width:18px;height:18px;border-width:2px"></div>Vérification de la position…</div>`;
 
-    const geo = await checkGeofence();
-
-    if(!geo.ok) {
-      if(btnArea) btnArea.innerHTML = origHTML;
-      alert('📍 Pointage impossible\n\n' + geo.reason);
-      return;
+    let latitude = null, longitude = null;
+    if (navigator.geolocation) {
+      try {
+        const pos = await new Promise((res, rej) =>
+          navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:true,timeout:12000,maximumAge:0})
+        );
+        latitude = pos.coords.latitude;
+        longitude = pos.coords.longitude;
+      } catch { /* géofence validée par le serveur, null = refus = blocage */ }
     }
 
-    setPause(null);
-    const heure=timeNow();
-    const today=todayStr();
-    const [ah,am]=heure.split(':').map(Number);
-    const retard=schedule?Math.max(0,(ah*60+am)-timeToMins(schedule.heure_debut)):0;
-
     try {
-      if(todayShift) {
-        await SB.from('sh_shifts').update({
-          heure_arrivee:heure,retard_minutes:retard,
-          updated_by:session.username,updated_at:nowISO()
-        }).eq('id',todayShift.id);
-        todayShift={...todayShift,heure_arrivee:heure,retard_minutes:retard};
-      } else {
-        const rec={
-          id:uid(),employee_id:employee.id,site_id:employee.site_id,date:today,
-          heure_arrivee:heure,heure_depart:null,
-          heure_debut_prevue:schedule?.heure_debut||null,
-          heure_fin_prevue:schedule?.heure_fin||null,
-          retard_minutes:retard,duree_minutes:0,pause_minutes:0,
-          validated_by_ka:null,validated_at_ka:null,
-          created_by:session.username,created_at:nowISO(),
-          updated_by:null,updated_at:null
-        };
-        const {error}=await SB.from('sh_shifts').upsert(rec,{onConflict:'employee_id,date'});
-        if(error) throw error;
-        todayShift=rec;
-      }
+      // ⚡ Validation géofence + timestamp = côté SERVEUR (Edge Function)
+      const result = await this._callClockAction('start', { latitude, longitude });
+      setPause(null);
+      todayShift = result.shift;
+      if(btnArea) btnArea.innerHTML = origHTML;
       this.renderClock();
-    } catch(e) { alert('Erreur lors du pointage : '+e.message); }
+    } catch(e) {
+      if(btnArea) btnArea.innerHTML = origHTML;
+      alert('📍 Pointage impossible\n\n' + e.message);
+    }
   },
 
   pauseShift() {
+    // La pause est un état UI local (début/fin de pause)
+    // La durée finale est envoyée au serveur lors du stop
     const ps=getPause()||{totalMs:0};
     ps.start=nowISO();
     setPause(ps);
@@ -803,62 +824,51 @@ const ClockApp = {
   },
 
   async confirmStop() {
-    // Vérification géolocalisation
-    const btnArea = document.querySelector('.btn-area');
-    const origHTML = btnArea ? btnArea.innerHTML : '';
-    if(btnArea) btnArea.innerHTML = `<div style="text-align:center;color:rgba(255,255,255,0.45);font-size:13px;padding:24px 0;display:flex;align-items:center;justify-content:center;gap:10px"><div class="spinner" style="width:18px;height:18px;border-width:2px"></div>Vérification de la position…</div>`;
-
-    const geo = await checkGeofence();
-
-    if(btnArea) btnArea.innerHTML = origHTML;
-
-    if(!geo.ok) {
-      alert('📍 Pointage impossible\n\n' + geo.reason);
-      return;
-    }
-
-    const heure=timeNow();
     const elapsed=this.getElapsedMins();
     const pauseMin=this.getPausedMins();
-    const msg=`Pointer le départ à ${heure} ?\n\n⏱ Temps travaillé : ${fmtMinutes(elapsed)}${pauseMin>0?'\n⏸ Pause : '+fmtMinutes(pauseMin):''}`;
+    // Afficher confirmation avec temps estimé (l'heure exacte sera fixée par le serveur)
+    const msg=`Pointer le départ maintenant ?\n\n⏱ Temps travaillé estimé : ${fmtMinutes(Math.max(0,elapsed-pauseMin))}${pauseMin>0?'\n⏸ Pause : '+fmtMinutes(pauseMin):''}`;
     if(!confirm(msg)) return;
-    this.stopShift(heure);
+    await this.stopShift();
   },
 
-  async stopShift(heure) {
+  async stopShift() {
     if(!todayShift?.heure_arrivee) return;
 
-    // Finalize any open pause
+    // Finaliser la pause ouverte
     const ps=getPause();
     if(ps?.start) {
       const addMs=Date.now()-new Date(ps.start).getTime();
       setPause({totalMs:(ps.totalMs||0)+addMs,start:null});
     }
-
     const pauseMin=this.getPausedMins();
-    const [ah,am]=todayShift.heure_arrivee.split(':').map(Number);
-    const [dh,dm]=heure.split(':').map(Number);
-    const totalMin=Math.max(0,(dh*60+dm)-(ah*60+am));
-    const workMin=Math.max(0,totalMin-pauseMin);
+
+    const btnArea = document.querySelector('.btn-area');
+    const origHTML = btnArea ? btnArea.innerHTML : '';
+    if(btnArea) btnArea.innerHTML = `<div style="text-align:center;color:rgba(255,255,255,0.45);font-size:13px;padding:24px 0;display:flex;align-items:center;justify-content:center;gap:10px"><div class="spinner" style="width:18px;height:18px;border-width:2px"></div>Vérification de la position…</div>`;
+
+    let latitude = null, longitude = null;
+    if (navigator.geolocation) {
+      try {
+        const pos = await new Promise((res, rej) =>
+          navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:true,timeout:12000,maximumAge:0})
+        );
+        latitude = pos.coords.latitude;
+        longitude = pos.coords.longitude;
+      } catch { /* serveur gérera */ }
+    }
 
     try {
-      await SB.from('sh_shifts').update({
-        heure_depart:heure,
-        duree_minutes:workMin,
-        pause_minutes:pauseMin,
-        updated_by:session.username,
-        updated_at:nowISO()
-      }).eq('id',todayShift.id);
-
-      // NOTE : Aucune entrée sh_pointage n'est créée ici automatiquement.
-      // Le shift (sh_shifts) enregistre les données brutes de présence.
-      // La création et la validation du pointage officiel (sh_pointage)
-      // se font exclusivement par un utilisateur autorisé dans l'application principale.
-
-      todayShift={...todayShift,heure_depart:heure,duree_minutes:workMin,pause_minutes:pauseMin};
+      // ⚡ Timestamp départ = côté SERVEUR, géofence validée serveur
+      const result = await this._callClockAction('stop', { latitude, longitude, pauseMinutes: pauseMin });
+      todayShift = result.shift;
       setPause(null);
+      if(btnArea) btnArea.innerHTML = origHTML;
       this.renderClock();
-    } catch(e) { alert('Erreur lors du pointage : '+e.message); }
+    } catch(e) {
+      if(btnArea) btnArea.innerHTML = origHTML;
+      alert('📍 Pointage impossible\n\n' + e.message);
+    }
   },
 
   // ---- TAB SWITCHING ----
@@ -1108,23 +1118,20 @@ const ClockApp = {
     errEl.style.display='none';
 
     try {
-      // Vérifier le mot de passe actuel
-      const currentHash = await sha256(current);
-      if(currentHash !== session.password_hash) {
+      // ── Vérifier le mot de passe actuel via Supabase Auth ──
+      btn.textContent='Vérification…';
+      const email = session.username + '@stayhere.internal';
+      const { error: verifyErr } = await SB.auth.signInWithPassword({ email, password: current });
+      if (verifyErr) {
         showErr('Mot de passe actuel incorrect.');
         btn.textContent='Enregistrer le nouveau mot de passe'; btn.disabled=false;
         return;
       }
 
-      // Sauvegarder le nouveau mot de passe
+      // ── Mettre à jour via Supabase Auth ────────────────────
       btn.textContent='Enregistrement…';
-      const newHash = await sha256(next);
-      const {error} = await SB.from('sh_users').update({password_hash:newHash}).eq('id',session.id);
+      const { error } = await SB.auth.updateUser({ password: next });
       if(error) throw error;
-
-      // Mettre à jour la session locale
-      session = {...session, password_hash:newHash};
-      localStorage.setItem('sh_clock_session', JSON.stringify(session));
 
       document.getElementById('pwd-overlay').remove();
       // Petit feedback visuel
@@ -1139,14 +1146,14 @@ const ClockApp = {
     }
   },
 
-  logout() {
+  async logout() {
     if(timerInterval){clearInterval(timerInterval);timerInterval=null;}
     session=null; employee=null; schedule=null; todayShift=null;
     leaveBalance=null; leaveRequests=[]; myPointage=[]; allHolidays=[];
     todayPointage=null; siteCoords=null;
     currentTab='pointage';
     setPause(null);
-    localStorage.removeItem('sh_clock_session');
+    await SB.auth.signOut();
     this.showLogin();
   }
 };
