@@ -379,7 +379,7 @@ const Cache = {
 let currentSession = null;
 
 async function loadAll() {
-  const [users, sites, affRows, employees, holidays, pointage, locks, audit, shifts, schedules, postes, roles, leaveReqs, leaveBals, tempAssign, shiftTypes, weeklyScheds] = await Promise.all([
+  const [users, sites, affRows, employees, holidays, pointage, locks, audit, shifts, schedules, postes, roles, leaveReqs, leaveBals, tempAssign, shiftTypes, weeklyScheds, userProfiles] = await Promise.all([
     SB.from('sh_users').select('*'),
     SB.from('sh_sites').select('*'),
     SB.from('sh_affectations').select('*'),
@@ -397,8 +397,16 @@ async function loadAll() {
     SB.from('sh_temp_assignments').select('*').order('date_debut',{ascending:false}),
     SB.from('sh_shift_types').select('*').order('ordre'),
     SB.from('sh_weekly_schedule').select('*'),
+    SB.from('sh_user_profiles').select('*'),
   ]);
-  Cache.users = users.data||[];
+  // Fusionner sh_users (legacy, a le password_hash) et sh_user_profiles (source de vérité Auth)
+  // sh_users a priorité (contient password_hash), sh_user_profiles comble les manques
+  const byUsername = new Map();
+  for (const u of (users.data||[])) byUsername.set(u.username, u);
+  for (const p of (userProfiles.data||[])) {
+    if (!byUsername.has(p.username)) byUsername.set(p.username, p);
+  }
+  Cache.users = [...byUsername.values()];
   Cache.sites = sites.data||[];
   Cache.affectations = (affRows.data||[]).map(r=>r.nom);
   Cache.employees = employees.data||[];
