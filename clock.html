@@ -9,6 +9,7 @@
   <meta name="theme-color" content="#131312">
   <title>StayHere — Pointage Mobile</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
   <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html{height:100%;-webkit-text-size-adjust:100%}
@@ -153,10 +154,14 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#13131
 <body>
 <script>
 // ================================================================
-// CONFIG SUPABASE (mêmes que l'application principale)
+// CONFIG SUPABASE — chargée depuis config.js (gitignore)
 // ================================================================
-const SB_URL = 'https://jqunhuyvkojbwabhopxo.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxdW5odXl2a29qYndhYmhvcHhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4Mjg5MDgsImV4cCI6MjA5MTQwNDkwOH0.DHCry642LW8YoRzarwHt1T8fo__9c-Xnrypa2QuTpdU';
+if (!window.SUPABASE_CONFIG) {
+  alert('⚠️ Fichier config.js manquant.\nCopiez config.example.js → config.js et renseignez vos credentials Supabase.');
+  throw new Error('SUPABASE_CONFIG non défini — config.js manquant');
+}
+const SB_URL = window.SUPABASE_CONFIG.url;
+const SB_KEY = window.SUPABASE_CONFIG.anonKey;
 
 let SB = null;
 let session = null;

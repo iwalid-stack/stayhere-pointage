@@ -18,3 +18,6 @@ npm-debug.log*
 .env
 .env.local
 *.env
+
+# Credentials Supabase — NE JAMAIS COMMITTER
+config.js
