@@ -2717,13 +2717,12 @@ const App = {
             const siteColRaw = (row['SITE']||row['Site']||row['site']||'').toString().trim();
             let rowSiteId = siteId; // fallback : onglet ou défaut
             if(siteColRaw) {
-              // Chercher par nom exact ou partiel dans DB.getSites()
+              // Chercher par nom : exact d'abord, puis partiel (DB contient la valeur Excel)
               const allSites = DB.getSites();
-              const match = allSites.find(s =>
-                s.nom?.toLowerCase() === siteColRaw.toLowerCase() ||
-                s.nom?.toLowerCase().includes(siteColRaw.toLowerCase()) ||
-                siteColRaw.toLowerCase().includes(s.nom?.toLowerCase())
-              );
+              const siteColLower = siteColRaw.toLowerCase();
+              const match =
+                allSites.find(s => s.nom?.toLowerCase() === siteColLower) ||
+                allSites.find(s => s.nom?.toLowerCase().includes(siteColLower));
               if(match) rowSiteId = match.id;
             }
 
