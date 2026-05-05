@@ -453,7 +453,15 @@ const DB = {
   getUsers() { return Cache.users; },
   async addUser(u) {
     u.id = uid(); Cache.users.push(u);
-    await SB.from('sh_users').insert(u);
+    // Utiliser l'Edge Function create-user pour créer Auth + profil directement
+    const {data:{session:s}} = await SB.auth.getSession();
+    const res = await fetch(`${SB_URL}/functions/v1/create-user`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','Authorization':`Bearer ${s?.access_token}`,'apikey':SB_KEY},
+      body: JSON.stringify(u),
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) throw new Error(json.error || `Erreur création utilisateur (${res.status})`);
   },
   async updateUserPassword(id, hash) {
     const u=Cache.users.find(x=>x.id===id); if(u)u.password_hash=hash;
@@ -2753,6 +2761,7 @@ const App = {
           <td>${r.prenom} ${r.nom}</td>
           <td class="text-muted" style="font-size:11px">${r.imm||'—'}</td>
           <td class="text-muted" style="font-size:11px">${r.poste||'—'}</td>
+          <td class="text-muted" style="font-size:11px">${r.affectation||'—'}</td>
           <td class="text-muted" style="font-size:11px">${r.siteName||'—'}</td>
           <td class="text-muted" style="font-size:11px">${r.role||'collaborateur'}</td>
           <td><span class="cred-user">${r.username}</span></td>
@@ -2762,7 +2771,7 @@ const App = {
         document.getElementById('import-preview').innerHTML=`
           <div class="alert alert-success">✓ <strong>${processed.length} collaborateurs</strong> détectés — identifiants et mots de passe générés automatiquement.</div>
           <div style="overflow-x:auto"><table class="import-table">
-            <thead><tr><th>Nom complet</th><th>N° IMM</th><th>Poste</th><th>Site</th><th>Rôle</th><th>Identifiant</th><th>Mot de passe</th></tr></thead>
+            <thead><tr><th>Nom complet</th><th>N° IMM</th><th>Poste</th><th>Affectation</th><th>Site</th><th>Rôle</th><th>Identifiant</th><th>Mot de passe</th></tr></thead>
             <tbody>${rows}</tbody>
           </table></div>`;
 
@@ -2794,6 +2803,14 @@ const App = {
     if(!data.length) return;
     setSyncStatus('busy','↻ Import en cours...');
     document.getElementById('import-actions').innerHTML=`<div class="alert alert-warning" style="margin:0;flex:1">⏳ Import en cours... ne fermez pas cette fenêtre.</div>`;
+
+    // Ajouter les nouvelles affectations dans sh_affectations
+    const newAffectations = [...new Set(data.map(r=>r.affectation).filter(Boolean))];
+    for(const aff of newAffectations) {
+      if(aff && !DB.getAffectations().includes(aff)) {
+        try { await DB.addAffectation(aff); } catch(e) { /* ignore doublon */ }
+      }
+    }
 
     let created=0, errors=0;
     for(const r of data) {
