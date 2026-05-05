@@ -374,12 +374,12 @@ const Cache = {
   audit:[], locks:[], holidays:[], affectations:[],
   shifts:[], schedules:[], postes:[], roles:[],
   leaveRequests:[], leaveBalances:[], shiftChangeRequests:[],
-  tempAssignments:[],
+  tempAssignments:[], shiftTypes:[], weeklySchedules:[],
 };
 let currentSession = null;
 
 async function loadAll() {
-  const [users, sites, affRows, employees, holidays, pointage, locks, audit, shifts, schedules, postes, roles, leaveReqs, leaveBals, tempAssign] = await Promise.all([
+  const [users, sites, affRows, employees, holidays, pointage, locks, audit, shifts, schedules, postes, roles, leaveReqs, leaveBals, tempAssign, shiftTypes, weeklyScheds] = await Promise.all([
     SB.from('sh_users').select('*'),
     SB.from('sh_sites').select('*'),
     SB.from('sh_affectations').select('*'),
@@ -395,6 +395,8 @@ async function loadAll() {
     SB.from('sh_leave_requests').select('*').order('created_at',{ascending:false}),
     SB.from('sh_leave_balances').select('*'),
     SB.from('sh_temp_assignments').select('*').order('date_debut',{ascending:false}),
+    SB.from('sh_shift_types').select('*').order('ordre'),
+    SB.from('sh_weekly_schedule').select('*'),
   ]);
   Cache.users = users.data||[];
   Cache.sites = sites.data||[];
@@ -411,6 +413,8 @@ async function loadAll() {
   Cache.leaveRequests = leaveReqs.data||[];
   Cache.leaveBalances = leaveBals.data||[];
   Cache.tempAssignments = tempAssign.data||[];
+  Cache.shiftTypes = shiftTypes.data||[];
+  Cache.weeklySchedules = weeklyScheds.data||[];
   const shiftChangeReqs = await SB.from('sh_shift_change_requests').select('*').order('requested_at',{ascending:false});
   Cache.shiftChangeRequests = shiftChangeReqs.data||[];
 }
@@ -503,15 +507,16 @@ const DB = {
     // saisir_planning = peut accéder au planning semaine et le générer
     // modifier_shifts_prevus = peut modifier les horaires prévus d'un shift
     const d={
-      cluster_ops:           {voir_tous_sites:true, valider:true, administrer:true, verrouiller:true, exporter:true, voir_equipe:true, voir_equipe_terrain:true, saisir_restreint:true, saisir_planning:true, modifier_shifts_prevus:true},
-      juriste:               {voir_tous_sites:true, valider:true, administrer:true, verrouiller:false,exporter:true, voir_equipe:true, voir_equipe_terrain:true, saisir_restreint:true, saisir_planning:false,modifier_shifts_prevus:false},
-      responsable_financier: {voir_tous_sites:true, valider:true, administrer:true, verrouiller:false,exporter:true, voir_equipe:true, voir_equipe_terrain:true, saisir_restreint:true, saisir_planning:false,modifier_shifts_prevus:false},
-      kindness_ambassador:   {voir_tous_sites:false,valider:false,administrer:false,verrouiller:false,exporter:false,voir_equipe:true, voir_equipe_terrain:true, saisir_restreint:false,saisir_planning:true, modifier_shifts_prevus:true},
-      gouvernante_generale:  {voir_tous_sites:false,valider:false,administrer:false,verrouiller:false,exporter:false,voir_equipe:false,voir_equipe_terrain:true, saisir_restreint:false,saisir_planning:true, modifier_shifts_prevus:true},
-      assistante_gouvernante:{voir_tous_sites:false,valider:false,administrer:false,verrouiller:false,exporter:false,voir_equipe:false,voir_equipe_terrain:true, saisir_restreint:false,saisir_planning:true, modifier_shifts_prevus:true},
-      collaborateur:         {voir_tous_sites:false,valider:false,administrer:false,verrouiller:false,exporter:false,voir_equipe:false,voir_equipe_terrain:false,saisir_restreint:false,saisir_planning:false,modifier_shifts_prevus:false},
+      cluster_ops:              {voir_tous_sites:true, valider:true, administrer:true, verrouiller:true, exporter:true, voir_equipe:true, voir_equipe_terrain:true, saisir_restreint:true, saisir_planning:true, modifier_shifts_prevus:true, gerer_rotation:true},
+      juriste:                  {voir_tous_sites:true, valider:true, administrer:true, verrouiller:false,exporter:true, voir_equipe:true, voir_equipe_terrain:true, saisir_restreint:true, saisir_planning:false,modifier_shifts_prevus:false,gerer_rotation:false},
+      responsable_financier:    {voir_tous_sites:true, valider:true, administrer:true, verrouiller:false,exporter:true, voir_equipe:true, voir_equipe_terrain:true, saisir_restreint:true, saisir_planning:false,modifier_shifts_prevus:false,gerer_rotation:false},
+      cluster_revenue_manager:  {voir_tous_sites:true, valider:false,administrer:false,verrouiller:false,exporter:true, voir_equipe:true, voir_equipe_terrain:false,saisir_restreint:false,saisir_planning:false,modifier_shifts_prevus:false,gerer_rotation:true},
+      kindness_ambassador:      {voir_tous_sites:false,valider:false,administrer:false,verrouiller:false,exporter:false,voir_equipe:true, voir_equipe_terrain:true, saisir_restreint:false,saisir_planning:true, modifier_shifts_prevus:true, gerer_rotation:false},
+      gouvernante_generale:     {voir_tous_sites:false,valider:false,administrer:false,verrouiller:false,exporter:false,voir_equipe:false,voir_equipe_terrain:true, saisir_restreint:false,saisir_planning:true, modifier_shifts_prevus:true, gerer_rotation:false},
+      assistante_gouvernante:   {voir_tous_sites:false,valider:false,administrer:false,verrouiller:false,exporter:false,voir_equipe:false,voir_equipe_terrain:true, saisir_restreint:false,saisir_planning:true, modifier_shifts_prevus:true, gerer_rotation:false},
+      collaborateur:            {voir_tous_sites:false,valider:false,administrer:false,verrouiller:false,exporter:false,voir_equipe:false,voir_equipe_terrain:false,saisir_restreint:false,saisir_planning:false,modifier_shifts_prevus:false,gerer_rotation:false},
     };
-    return d[roleId]||{voir_tous_sites:false,valider:false,administrer:false,verrouiller:false,exporter:false,voir_equipe:false,voir_equipe_terrain:false,saisir_restreint:false,saisir_planning:false,modifier_shifts_prevus:false};
+    return d[roleId]||{voir_tous_sites:false,valider:false,administrer:false,verrouiller:false,exporter:false,voir_equipe:false,voir_equipe_terrain:false,saisir_restreint:false,saisir_planning:false,modifier_shifts_prevus:false,gerer_rotation:false};
   },
   getPerms(roleId) {
     const r=this.getRoleById(roleId);
@@ -666,6 +671,34 @@ const DB = {
     const t=Cache.tempAssignments.find(x=>x.id===id);
     if(t){t.ended_at=nowISO();t.ended_by=session.username;}
     await SB.from('sh_temp_assignments').update({ended_at:nowISO(),ended_by:session.username}).eq('id',id);
+  },
+
+  // SHIFT TYPES (modèles de shifts rotatifs)
+  getShiftTypes() { return Cache.shiftTypes; },
+  getShiftType(id) { return Cache.shiftTypes.find(s=>s.id===id)||null; },
+
+  // WEEKLY SCHEDULE (planning rotatif jour par jour)
+  getWeeklySchedule(empId, date) { return Cache.weeklySchedules.find(s=>s.employee_id===empId&&s.date===date)||null; },
+  getWeeklyScheduleForWeek(dates) { return Cache.weeklySchedules.filter(s=>dates.includes(s.date)); },
+  async setWeeklySchedule(empId, date, shiftTypeId, isOff=false) {
+    const existing=this.getWeeklySchedule(empId,date);
+    const rec={employee_id:empId,date,shift_type_id:shiftTypeId||null,is_off:isOff,updated_by:currentSession.username,updated_at:nowISO()};
+    if(existing){
+      Object.assign(existing,rec);
+      await SB.from('sh_weekly_schedule').update(rec).eq('employee_id',empId).eq('date',date);
+    } else {
+      rec.id=uid(); Cache.weeklySchedules.push(rec);
+      await SB.from('sh_weekly_schedule').insert(rec);
+    }
+  },
+  async clearWeeklySchedule(empId, date) {
+    Cache.weeklySchedules=Cache.weeklySchedules.filter(s=>!(s.employee_id===empId&&s.date===date));
+    await SB.from('sh_weekly_schedule').delete().eq('employee_id',empId).eq('date',date);
+  },
+  async toggleRotation(empId) {
+    const emp=Cache.employees.find(e=>e.id===empId); if(!emp) return;
+    emp.has_rotation=!emp.has_rotation;
+    await SB.from('sh_employees').update({has_rotation:emp.has_rotation}).eq('id',empId);
   },
 
   // LOCKS
@@ -1336,6 +1369,7 @@ const App = {
           <div class="nav-item active" onclick="App.navigate('pointage')"><span class="icon">📅</span> Saisie du pointage</div>
           ${(this.canVoirEquipe()||this.canVoirEquipeTerrain()||this.canGlobal())?`<div class="nav-item" onclick="App.navigate('shifts')"><span class="icon">⏱</span> Pointage horaire</div>`:''}
           ${this.canSaisirPlanning()?`<div class="nav-item" onclick="App.navigate('planning')"><span class="icon">📋</span> Planning semaine</div>`:''}
+          ${this.canGererRotation()?`<div class="nav-item" onclick="App.navigate('rotation')"><span class="icon">🔄</span> Shifts rotatifs</div>`:''}
           ${this.canGlobal()?`<div class="nav-item" onclick="App.navigate('synthese')"><span class="icon">📊</span> Synthèse globale</div>`:''}
           ${this.canValidate()?`<div class="nav-item" onclick="App.navigate('validation')"><span class="icon">✅</span> Validation</div>`:''}
           ${(this.canValidate()||this.canManage())?`<div class="nav-item" onclick="App.navigate('conges')"><span class="icon">🏖</span> Congés & RECUP</div>`:''}
@@ -1442,6 +1476,11 @@ const App = {
         if(this.currentPage==='collaborateurs') this.renderCollaborateurs();
         if(this.currentPage==='planning') this.renderPlanning();
       })
+      .on('postgres_changes',{event:'*',schema:'public',table:'sh_weekly_schedule'}, async ()=>{
+        const {data}=await SB.from('sh_weekly_schedule').select('*');
+        Cache.weeklySchedules=data||[];
+        if(this.currentPage==='rotation') this.renderRotation();
+      })
       .subscribe();
   },
 
@@ -1476,6 +1515,7 @@ const App = {
   canSaisirMap()           { return this._perm('saisir_restreint') || canSaisirTypeRestreint(); },
   canSaisirPlanning()      { return this._perm('saisir_planning'); },
   canModifierShiftsPrevus(){ return this._perm('modifier_shifts_prevus'); },
+  canGererRotation()       { return this._perm('gerer_rotation'); },
 
   // Retourne les collaborateurs visibles selon le rôle de l'utilisateur connecté
   _getVisibleEmps(siteId) {
@@ -1526,12 +1566,12 @@ const App = {
   },
 
   renderPage() {
-    const titles={pointage:'Saisie du pointage',shifts:'Pointage horaire',planning:'Planning semaine',synthese:'Synthèse globale',validation:'Validation',conges:'Congés & RECUP',collaborateurs:'Collaborateurs',sites:'Sites',feries:'Jours fériés',utilisateurs:'Utilisateurs',parametres:'Paramètres',audit:'Historique des modifications',verrous:'Verrous de période'};
+    const titles={pointage:'Saisie du pointage',shifts:'Pointage horaire',planning:'Planning semaine',rotation:'Shifts rotatifs',synthese:'Synthèse globale',validation:'Validation',conges:'Congés & RECUP',collaborateurs:'Collaborateurs',sites:'Sites',feries:'Jours fériés',utilisateurs:'Utilisateurs',parametres:'Paramètres',audit:'Historique des modifications',verrous:'Verrous de période'};
     const titleEl=document.getElementById('page-title');
     if(titleEl) titleEl.textContent=titles[this.currentPage]||'';
     const extra=document.getElementById('topbar-extra');
     if(extra) extra.innerHTML='';
-    ({pointage:()=>this.renderPointage(),shifts:()=>this.renderShifts(),planning:()=>this.renderPlanning(),synthese:()=>this.renderSynthese(),validation:()=>this.renderValidation(),conges:()=>this.renderConges(),collaborateurs:()=>this.renderCollaborateurs(),sites:()=>this.renderSites(),feries:()=>this.renderFeries(),utilisateurs:()=>this.renderUtilisateurs(),parametres:()=>this.renderParametres(),audit:()=>this.renderAudit(),verrous:()=>this.renderVerrous()})[this.currentPage]?.();
+    ({pointage:()=>this.renderPointage(),shifts:()=>this.renderShifts(),planning:()=>this.renderPlanning(),rotation:()=>this.renderRotation(),synthese:()=>this.renderSynthese(),validation:()=>this.renderValidation(),conges:()=>this.renderConges(),collaborateurs:()=>this.renderCollaborateurs(),sites:()=>this.renderSites(),feries:()=>this.renderFeries(),utilisateurs:()=>this.renderUtilisateurs(),parametres:()=>this.renderParametres(),audit:()=>this.renderAudit(),verrous:()=>this.renderVerrous()})[this.currentPage]?.();
   },
 
   // ---- POINTAGE ----
@@ -2005,6 +2045,7 @@ const App = {
 
   // ---- PLANNING SEMAINE ----
   _planningWeek: null,
+  _rotWeek: null,
 
   _getMonday(date) {
     const d=new Date(date); const day=d.getDay();
@@ -2227,6 +2268,190 @@ const App = {
     }
     setSyncStatus('ok','● En ligne');
     this.renderPlanning();
+  },
+
+  // ---- SHIFTS ROTATIFS ----
+  renderRotation() {
+    if(!this._rotWeek) this._rotWeek=this._getMonday(new Date());
+    const days=this._weekDays(this._rotWeek);
+    const DAY_SHORT=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+    const DAY_FULL =['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
+    const shiftTypes=DB.getShiftTypes().filter(s=>s.actif);
+    const sites=DB.getSites().filter(s=>s.actif);
+    const canEdit=this.canGererRotation();
+
+    // Tous les employés en rotation (tous sites pour les globaux, site filtré sinon)
+    const allRotEmps=DB.getEmployees().filter(e=>e.actif&&e.has_rotation&&
+      (this.canGlobal()||e.site_id===this.currentSite));
+
+    // Employés sans rotation (pour le toggle)
+    const noRotEmps=DB.getEmployees().filter(e=>e.actif&&!e.has_rotation&&
+      (this.canGlobal()||e.site_id===this.currentSite));
+
+    const siteSelector=this.canGlobal()
+      ?`<select onchange="App.changeSite(this.value)" style="max-width:220px">${sites.map(s=>`<option value="${s.id}" ${s.id===this.currentSite?'selected':''}>${s.nom}</option>`).join('')}</select>`
+      :`<strong>${DB.getSiteById(this.currentSite)?.nom||''}</strong>`;
+
+    // Légende shifts
+    const shiftLegend=shiftTypes.map(st=>`
+      <span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;margin-right:10px">
+        <span style="width:10px;height:10px;border-radius:50%;background:${st.couleur};display:inline-block"></span>
+        <strong>${st.nom}</strong> ${st.heure_debut}–${st.heure_fin==='00:00'?'Minuit':st.heure_fin}
+      </span>`).join('');
+
+    // Entête colonnes jours
+    const hdrCells=days.map((date,i)=>{
+      const d=parseInt(date.split('-')[2]);
+      const bg=i>=5?'background:#2d3748':'';
+      return`<th style="${bg};min-width:110px;text-align:center">${DAY_SHORT[i]}<br><small style="opacity:0.7">${d}</small></th>`;
+    }).join('');
+
+    // Lignes par employé
+    const rows=allRotEmps.map(emp=>{
+      const site=DB.getSiteById(emp.site_id);
+      const cells=days.map((date,i)=>{
+        const entry=DB.getWeeklySchedule(emp.id,date);
+        const bg=i>=5?'background:#1a202c':'';
+
+        if(!canEdit) {
+          // Lecture seule
+          if(!entry||(!entry.shift_type_id&&!entry.is_off)) {
+            return`<td style="text-align:center;padding:5px 4px;${bg}"><span style="color:#555;font-size:13px">—</span></td>`;
+          }
+          if(entry.is_off) {
+            return`<td style="text-align:center;padding:5px 4px;background:#2a1a1a"><span style="color:#f87171;font-weight:700;font-size:11px">OFF</span></td>`;
+          }
+          const st=DB.getShiftType(entry.shift_type_id);
+          return`<td style="text-align:center;padding:5px 4px;background:${st?.couleur||'#333'}22">
+            <span style="color:${st?.couleur||'#ccc'};font-weight:700;font-size:11px">${st?.nom||'?'}</span>
+            <div style="font-size:9px;color:${st?.couleur||'#ccc'};opacity:0.8">${st?.heure_debut||''}–${st?.heure_fin==='00:00'?'00:00':st?.heure_fin||''}</div>
+          </td>`;
+        }
+
+        // Éditable : sélecteur inline
+        const selOpts=`<option value="" ${!entry||(!entry.shift_type_id&&!entry.is_off)?'selected':''}>—</option>`
+          +shiftTypes.map(st=>`<option value="${st.id}" ${entry?.shift_type_id===st.id&&!entry?.is_off?'selected':''}>${st.nom}</option>`).join('')
+          +`<option value="off" ${entry?.is_off?'selected':''}>OFF</option>`;
+        const cellBg=entry?.is_off?'background:#2a1a1a'
+          :entry?.shift_type_id?`background:${DB.getShiftType(entry.shift_type_id)?.couleur||'#333'}22`
+          :(i>=5?'background:#1a202c':'');
+        return`<td style="padding:3px 4px;${cellBg}">
+          <select style="width:100%;font-size:11px;padding:3px 4px;background:transparent;border:1px solid #334;color:inherit;border-radius:4px"
+            onchange="App.setRotationCell('${emp.id}','${date}',this.value)">${selOpts}</select>
+        </td>`;
+      }).join('');
+
+      return`<tr>
+        <td style="min-width:170px;padding:8px 10px">
+          <strong style="font-size:13px">${emp.prenom} ${emp.nom}</strong>
+          <div style="font-size:10px;color:var(--text-muted)">${emp.poste}${this.canGlobal()&&site?` · ${site.nom}`:''}</div>
+          ${canEdit?`<button class="btn btn-ghost" style="font-size:10px;padding:1px 6px;margin-top:3px;color:#f87171" onclick="App.toggleRotationEmp('${emp.id}')">Retirer de la rotation</button>`:''}
+        </td>
+        ${cells}
+      </tr>`;
+    }).join('');
+
+    // Section ajout d'employé à la rotation
+    const addSection=canEdit&&noRotEmps.length?`
+      <div style="margin-top:20px;padding:16px;background:var(--card);border-radius:8px;border:1px solid var(--border)">
+        <strong style="font-size:13px">➕ Ajouter des collaborateurs à la rotation</strong>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <select id="rot-add-emp" style="flex:1;min-width:200px;padding:6px 10px">
+            <option value="">— Choisir un collaborateur —</option>
+            ${noRotEmps.map(e=>{
+              const s=DB.getSiteById(e.site_id);
+              return`<option value="${e.id}">${e.prenom} ${e.nom} · ${e.poste}${this.canGlobal()&&s?' ('+s.nom+')':''}`;
+            }).join('')}
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="App.addToRotation()">Ajouter</button>
+        </div>
+      </div>`:'';
+
+    document.getElementById('page-content').innerHTML=`
+      <div class="grid-controls" style="flex-wrap:wrap;gap:10px">
+        ${siteSelector}
+        <div class="date-nav">
+          <button onclick="App.prevRotWeek()">‹</button>
+          <span style="min-width:240px;font-size:13px">${this._fmtWeekLabel(days)}</span>
+          <button onclick="App.nextRotWeek()">›</button>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="App.goRotCurrentWeek()">Cette semaine</button>
+        ${canEdit?`<button class="btn btn-secondary btn-sm" onclick="App.copyPrevRotWeek()" title="Copier le planning de la semaine précédente">📋 Copier semaine préc.</button>`:''}
+      </div>
+      <div style="margin:12px 0 16px;display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+        <span style="font-size:11px;color:var(--text-muted);margin-right:4px">Shifts :</span>
+        ${shiftLegend}
+        <span style="font-size:11px;color:var(--text-muted);margin-left:6px">· <strong style="color:#f87171">OFF</strong> = Repos</span>
+        <span style="font-size:11px;color:var(--text-muted);margin-left:4px">· <strong>—</strong> = Non défini (bloqué sur l'horloge)</span>
+      </div>
+      ${allRotEmps.length===0
+        ?`<div class="alert alert-warning">Aucun collaborateur en rotation sur ce site. Ajoutez-en ci-dessous.</div>`
+        :`<div class="pointage-table-wrapper">
+          <table class="pointage-table">
+            <thead><tr><th class="col-emp">Collaborateur</th>${hdrCells}</tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`}
+      ${addSection}`;
+  },
+
+  prevRotWeek()       { const d=new Date(this._rotWeek+'T12:00:00');d.setDate(d.getDate()-7);this._rotWeek=d.toISOString().substring(0,10);this.renderRotation(); },
+  nextRotWeek()       { const d=new Date(this._rotWeek+'T12:00:00');d.setDate(d.getDate()+7);this._rotWeek=d.toISOString().substring(0,10);this.renderRotation(); },
+  goRotCurrentWeek()  { this._rotWeek=this._getMonday(new Date());this.renderRotation(); },
+
+  async setRotationCell(empId, date, val) {
+    setSyncStatus('busy','↻...');
+    try {
+      if(!val) {
+        await DB.clearWeeklySchedule(empId,date);
+      } else if(val==='off') {
+        await DB.setWeeklySchedule(empId,date,null,true);
+      } else {
+        await DB.setWeeklySchedule(empId,date,val,false);
+      }
+      setSyncStatus('ok','● En ligne');
+    } catch(e) {
+      setSyncStatus('error','⚠ Erreur');
+      alert('Erreur : '+e.message);
+    }
+    this.renderRotation();
+  },
+
+  async toggleRotationEmp(empId) {
+    const emp=DB.getEmployees().find(e=>e.id===empId);
+    if(!emp||!confirm(`Retirer ${emp.prenom} ${emp.nom} de la rotation ? Les plannings existants sont conservés.`)) return;
+    await DB.toggleRotation(empId);
+    this.renderRotation();
+  },
+
+  async addToRotation() {
+    const empId=document.getElementById('rot-add-emp')?.value;
+    if(!empId) return;
+    await DB.toggleRotation(empId);
+    this.renderRotation();
+  },
+
+  async copyPrevRotWeek() {
+    const days=this._weekDays(this._rotWeek);
+    const prevDays=days.map(d=>{const dt=new Date(d+'T12:00:00');dt.setDate(dt.getDate()-7);return dt.toISOString().substring(0,10);});
+    const rotEmps=DB.getEmployees().filter(e=>e.actif&&e.has_rotation&&(this.canGlobal()||e.site_id===this.currentSite));
+    if(!rotEmps.length){alert('Aucun collaborateur en rotation.');return;}
+    let copied=0,skipped=0;
+    setSyncStatus('busy','↻ Copie...');
+    for(const emp of rotEmps){
+      for(let i=0;i<7;i++){
+        const targetDate=days[i];
+        const sourceDate=prevDays[i];
+        if(DB.getWeeklySchedule(emp.id,targetDate)) {skipped++;continue;}
+        const prev=DB.getWeeklySchedule(emp.id,sourceDate);
+        if(!prev) continue;
+        await DB.setWeeklySchedule(emp.id,targetDate,prev.shift_type_id,prev.is_off||false);
+        copied++;
+      }
+    }
+    setSyncStatus('ok','● En ligne');
+    alert(`${copied} cellule(s) copiée(s). ${skipped} déjà renseignée(s), conservées.`);
+    this.renderRotation();
   },
 
   // ---- SYNTHESE ----
@@ -3227,6 +3452,7 @@ const App = {
       {key:'saisir_restreint',label:'Saisir mise à pied',icon:'⚖️'},
       {key:'saisir_planning',label:'Saisir le planning semaine',icon:'📋'},
       {key:'modifier_shifts_prevus',label:'Modifier horaires de shift',icon:'⏱'},
+      {key:'gerer_rotation',label:'Gérer les shifts rotatifs',icon:'🔄'},
     ];
     const rolesHtml=allRoles.map(role=>`
       <div class="role-card">
@@ -3311,6 +3537,7 @@ const App = {
       {key:'saisir_restreint',label:'⚖️ Saisir mise à pied'},
       {key:'saisir_planning',label:'📋 Saisir le planning semaine'},
       {key:'modifier_shifts_prevus',label:'⏱ Modifier horaires de shift'},
+      {key:'gerer_rotation',label:'🔄 Gérer les shifts rotatifs'},
     ];
     this.showModal(`
       <div class="modal-header"><div class="modal-title">Nouveau rôle</div><button class="modal-close" onclick="App.closeModal()">✕</button></div>
@@ -3335,6 +3562,7 @@ const App = {
       saisir_restreint:   document.getElementById('perm-saisir_restreint')?.checked||false,
       saisir_planning:    document.getElementById('perm-saisir_planning')?.checked||false,
       modifier_shifts_prevus:document.getElementById('perm-modifier_shifts_prevus')?.checked||false,
+      gerer_rotation:     document.getElementById('perm-gerer_rotation')?.checked||false,
     };
     setSyncStatus('busy','↻...');
     await DB.addRole(role);

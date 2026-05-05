@@ -42,6 +42,30 @@ function timeMaroc(): string {
   return nowMaroc().substring(11, 16);
 }
 
+// ── Convertit HH:MM en minutes depuis minuit ───────────────
+function timeToMin(t: string): number {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
+// ── Vérifie si l'heure actuelle est dans la fenêtre d'un shift ──
+// Gère les shifts overnight (ex : Soir 16:00 → 00:00)
+// Fenêtre : 30 min avant le début jusqu'à la fin du shift
+function isInShiftWindow(currentTime: string, debut: string, fin: string): boolean {
+  const now     = timeToMin(currentTime);
+  const start   = timeToMin(debut);
+  const end     = fin === '00:00' ? 24 * 60 : timeToMin(fin); // minuit = 1440
+  const windowStart = start - 30;  // peut pointer 30 min avant
+
+  if (end > start) {
+    // Shift normal (pas overnight)
+    return now >= windowStart && now < end;
+  } else {
+    // Shift overnight (ex 16:00 → 00:00 → next day)
+    return now >= windowStart || now < end;
+  }
+}
+
 // ── Handler principal ───────────────────────────────────────
 Deno.serve(async (req: Request) => {
 
@@ -120,7 +144,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: employee } = await sbAdmin
       .from('sh_employees')
-      .select('site_id, pointage_horaire')
+      .select('site_id, pointage_horaire, has_rotation')
       .eq('id', empId)
       .single();
 
@@ -143,6 +167,57 @@ Deno.serve(async (req: Request) => {
         { error: 'Jour de repos — pointage impossible' },
         { status: 403, headers: corsHeaders }
       );
+    }
+
+    // ── 5b. Planning rotatif : validation fenêtre horaire ────
+    let rotationShiftDebut: string | null = null;
+    let rotationShiftFin: string | null   = null;
+
+    if (employee.has_rotation && action === 'start') {
+      // Récupérer le shift prévu pour aujourd'hui
+      const { data: weeklyEntry } = await sbAdmin
+        .from('sh_weekly_schedule')
+        .select('shift_type_id, is_off')
+        .eq('employee_id', empId)
+        .eq('date', today)
+        .maybeSingle();
+
+      if (!weeklyEntry) {
+        return Response.json(
+          { error: 'Aucun shift programmé pour aujourd\'hui. Contactez votre responsable.' },
+          { status: 403, headers: corsHeaders }
+        );
+      }
+
+      if (weeklyEntry.is_off) {
+        return Response.json(
+          { error: 'Jour de repos selon votre planning. Pointage impossible.' },
+          { status: 403, headers: corsHeaders }
+        );
+      }
+
+      if (weeklyEntry.shift_type_id) {
+        const { data: shiftType } = await sbAdmin
+          .from('sh_shift_types')
+          .select('nom, heure_debut, heure_fin')
+          .eq('id', weeklyEntry.shift_type_id)
+          .single();
+
+        if (shiftType) {
+          const currentTime = timeMaroc();
+          if (!isInShiftWindow(currentTime, shiftType.heure_debut, shiftType.heure_fin)) {
+            const finLabel = shiftType.heure_fin === '00:00' ? '00:00' : shiftType.heure_fin;
+            return Response.json(
+              {
+                error: `Hors de votre fenêtre de pointage. Shift ${shiftType.nom} : ${shiftType.heure_debut}–${finLabel}. Vous pouvez pointer à partir de ${String(Math.floor((timeToMin(shiftType.heure_debut) - 30) / 60) % 24).padStart(2,'0')}:${String((timeToMin(shiftType.heure_debut) - 30) % 60).padStart(2,'0')}.`,
+              },
+              { status: 403, headers: corsHeaders }
+            );
+          }
+          rotationShiftDebut = shiftType.heure_debut;
+          rotationShiftFin   = shiftType.heure_fin;
+        }
+      }
     }
 
     // ── 6. Vérification géofence SERVEUR ─────────────────────
@@ -199,7 +274,7 @@ Deno.serve(async (req: Request) => {
         return Response.json({ error: 'Shift déjà démarré' }, { status: 409, headers: corsHeaders });
       }
 
-      const shiftData = {
+      const shiftData: Record<string, unknown> = {
         id: `sh_${empId}_${today}`,
         employee_id: empId,
         site_id: effectiveSiteId,
@@ -210,6 +285,9 @@ Deno.serve(async (req: Request) => {
         updated_by: profile.username,
         updated_at: serverNow,
       };
+      // Renseigner les horaires prévus si shift rotatif
+      if (rotationShiftDebut) shiftData.heure_debut_prevue = rotationShiftDebut;
+      if (rotationShiftFin)   shiftData.heure_fin_prevue   = rotationShiftFin;
 
       const { data, error } = await sbAdmin
         .from('sh_shifts')
