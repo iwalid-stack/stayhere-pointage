@@ -2426,7 +2426,10 @@ const App = {
     if(search!==undefined) this._collabSearch=search;
     const q=(this._collabSearch||'').toLowerCase().trim();
     const extra=document.getElementById('topbar-extra');
-    if(extra) extra.innerHTML=`<button class="btn btn-secondary btn-sm" onclick="App.importExcel()">📥 Importer Excel</button> <button class="btn btn-primary btn-sm" onclick="App.openAddEmployee()">+ Nouveau</button>`;
+    if(extra) extra.innerHTML=`
+      ${this.canGlobal()?`<button class="btn btn-danger btn-sm" onclick="App.openPurgeUsers()" style="background:rgba(217,48,37,0.12);color:var(--danger);border:1px solid rgba(217,48,37,0.3)">🗑 Vider la liste</button>`:''}
+      <button class="btn btn-secondary btn-sm" onclick="App.importExcel()">📥 Importer Excel</button>
+      <button class="btn btn-primary btn-sm" onclick="App.openAddEmployee()">+ Nouveau</button>`;
     const all=DB.getEmployees().filter(e=>e.actif);
     const filtered=q?all.filter(e=>{
       const site=DB.getSiteById(e.site_id);
@@ -2552,6 +2555,100 @@ const App = {
     if(digits!=='000') return 'sh' + digits;
     const slug = this._toSlug(prenom||'').slice(0,4).padEnd(3,'x');
     return slug + Math.floor(100+Math.random()*900);
+  },
+
+  // ---- RESET LISTE COLLABORATEURS ----
+  openPurgeUsers() {
+    const totalCollabs = DB.getUsers().filter(u=>u.role==='collaborateur').length;
+    const totalEmps    = DB.getEmployees().filter(e=>e.actif).length;
+    this.showModal(`
+      <div class="modal-header">
+        <div class="modal-title" style="color:var(--danger)">🗑 Vider la liste des collaborateurs</div>
+        <button class="modal-close" onclick="App.closeModal()">✕</button>
+      </div>
+      <div class="alert alert-danger" style="margin-bottom:16px">
+        <strong>⚠️ Action irréversible</strong> — Cette action supprimera les comptes de connexion de tous les collaborateurs. Elle est conçue pour remplacer une liste de collaborateurs obsolète par une liste à jour.
+      </div>
+      <div class="card" style="margin-bottom:16px;padding:14px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:13px">
+          <span>Comptes collaborateurs à supprimer</span>
+          <strong style="color:var(--danger)">${totalCollabs}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px">
+          <span>Collaborateurs actifs (sh_employees)</span>
+          <strong>${totalEmps}</strong>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Que faire des données historiques (pointage, shifts) ?</label>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:8px">
+            <input type="radio" name="purge-history" value="keep" checked style="margin-top:2px">
+            <div>
+              <div style="font-weight:600;font-size:13px">✅ Conserver l'historique (recommandé)</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Les données de pointage et shifts sont gardées. Seuls les comptes de connexion sont supprimés.</div>
+            </div>
+          </label>
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px;border:1px solid rgba(217,48,37,0.3);border-radius:8px;background:rgba(217,48,37,0.03)">
+            <input type="radio" name="purge-history" value="delete" style="margin-top:2px">
+            <div>
+              <div style="font-weight:600;font-size:13px;color:var(--danger)">🗑 Tout supprimer</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Suppression complète — historique de pointage inclus. IRREVERSIBLE.</div>
+            </div>
+          </label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Pour confirmer, tapez <strong>SUPPRIMER</strong></label>
+        <input id="purge-confirm-text" type="text" placeholder="SUPPRIMER" style="border-color:rgba(217,48,37,0.4)">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button>
+        <button class="btn btn-danger" onclick="App.executePurge()" id="purge-btn">🗑 Vider la liste</button>
+      </div>`);
+  },
+
+  async executePurge() {
+    const confirmText = document.getElementById('purge-confirm-text')?.value?.trim();
+    if (confirmText !== 'SUPPRIMER') {
+      alert('Tapez exactement SUPPRIMER pour confirmer.');
+      return;
+    }
+    const keepHistory = document.querySelector('input[name="purge-history"]:checked')?.value === 'keep';
+    const btn = document.getElementById('purge-btn');
+    if(btn) { btn.textContent = '⏳ Suppression en cours…'; btn.disabled = true; }
+
+    try {
+      const { data: { session: sbSess } } = await SB.auth.getSession();
+      const res = await fetch(`${SB_URL}/functions/v1/purge-users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sbSess?.access_token}`,
+          'apikey': SB_KEY,
+        },
+        body: JSON.stringify({ scope: 'collaborateurs_only', keepHistory }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || `Erreur ${res.status}`);
+
+      // Recharger les données
+      await loadAll();
+      this.closeModal();
+
+      const d = json.deleted;
+      const msg = [
+        `✅ ${d.userProfiles} compte(s) de connexion supprimé(s)`,
+        `🔐 ${d.authAccounts} compte(s) Supabase Auth supprimé(s)`,
+        keepHistory ? `📦 Historique conservé` : `🗑 ${d.employees} employé(s) désactivé(s)`,
+        `\nVous pouvez maintenant importer la nouvelle liste via 📥 Importer Excel.`,
+      ].join('\n');
+      alert(msg);
+      this.renderCollaborateurs();
+    } catch(e) {
+      alert('Erreur : ' + e.message);
+      if(btn) { btn.textContent = '🗑 Vider la liste'; btn.disabled = false; }
+    }
   },
 
   importExcel() {
@@ -2690,10 +2787,11 @@ const App = {
           const emp={imm:r.imm,prenom:r.prenom,nom:r.nom,poste:r.poste||'Kindness Host',site_id:r.siteId,affectation:r.affectation||''};
           await DB.addEmployee(emp); empId=emp.id; created++;
         } else { empId=exists.id; }
-        // Créer le compte utilisateur si pas déjà existant
+        // Créer le compte utilisateur si pas déjà existant (sh_users legacy + sh_user_profiles via auto-migrate au 1er login)
         if(!DB.getUsers().find(u=>u.username===r.username)) {
           const hash=await sha256(r.password);
           await DB.addUser({username:r.username,nom:r.prenom+' '+r.nom,password_hash:hash,role:'collaborateur',site_id:r.siteId,employee_id:empId,acces_horloge:true,acces_principal:true});
+          // Note : le compte Supabase Auth sera créé automatiquement via auto-migrate-user au premier login
         }
       } catch(e) { errors++; console.error(e); }
     }
