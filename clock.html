@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#131312">
+  <title>StayHere — Pointage Mobile</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{height:100%;-webkit-text-size-adjust:100%}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#131312;color:white;min-height:100%;min-height:100dvh;overflow-x:hidden}
+
+/* ---- LOADING ---- */
+.loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;min-height:100dvh;gap:14px;background:#131312}
+.spinner{width:34px;height:34px;border:3px solid rgba(255,255,255,0.08);border-top-color:#FF622C;border-radius:50%;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadein{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.loading-text{font-size:13px;color:rgba(255,255,255,0.35)}
+
+/* ---- LOGIN ---- */
+.login-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;min-height:100dvh;padding:24px;background:linear-gradient(180deg,#1a1a18 0%,#0e0e0d 100%)}
+.login-logo{text-align:center;margin-bottom:36px}
+.login-logo .logo-mark{font-size:40px;margin-bottom:10px}
+.login-logo h1{font-size:22px;font-weight:800;letter-spacing:-0.5px;color:white}
+.login-logo p{font-size:13px;color:rgba(255,255,255,0.35);margin-top:4px}
+.login-card{width:100%;max-width:360px;background:rgba(255,255,255,0.05);border-radius:20px;padding:28px;border:1px solid rgba(255,255,255,0.08)}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:rgba(255,255,255,0.35);margin-bottom:8px}
+.field input{width:100%;padding:15px 16px;background:rgba(255,255,255,0.06);border:1.5px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;transition:border-color 0.15s}
+.field input::placeholder{color:rgba(255,255,255,0.2)}
+.field input:focus{border-color:#FF622C;background:rgba(255,98,44,0.06)}
+.btn-login{width:100%;padding:17px;background:#FF622C;color:white;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;margin-top:8px;font-family:inherit;transition:background 0.15s,transform 0.1s}
+.btn-login:active{background:#d94f20;transform:scale(0.98)}
+.error-box{background:rgba(217,48,37,0.12);border:1px solid rgba(217,48,37,0.25);color:#ff7b72;border-radius:10px;padding:11px 14px;font-size:13px;margin-bottom:16px;display:none;line-height:1.4}
+.main-link{display:block;text-align:center;margin-top:20px;font-size:12px;color:rgba(255,255,255,0.25);text-decoration:none}
+.main-link:hover{color:rgba(255,255,255,0.5)}
+
+/* ---- CLOCK SCREEN ---- */
+.clock-screen{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;background:#131312}
+.clock-header{padding:env(safe-area-inset-top,16px) 20px 16px;padding-top:max(env(safe-area-inset-top),16px);display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.06)}
+.user-info .user-name{font-weight:700;font-size:15px;color:white}
+.user-info .user-sub{font-size:12px;color:rgba(255,255,255,0.35);margin-top:2px}
+.header-actions{display:flex;gap:8px;align-items:center}
+.btn-sm-ghost{background:rgba(255,255,255,0.07);border:none;color:rgba(255,255,255,0.45);padding:8px 14px;border-radius:10px;font-size:12px;cursor:pointer;font-family:inherit;transition:background 0.15s}
+.btn-sm-ghost:active{background:rgba(255,255,255,0.12)}
+.btn-sm-icon{background:rgba(255,255,255,0.07);border:none;color:rgba(255,255,255,0.45);width:36px;height:36px;border-radius:10px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s}
+.btn-sm-icon:active{background:rgba(255,255,255,0.12)}
+
+.clock-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 24px 40px;text-align:center;gap:0}
+
+.clock-date{font-size:14px;color:rgba(255,255,255,0.35);margin-bottom:4px}
+.schedule-line{font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:36px}
+.schedule-line strong{color:rgba(255,255,255,0.65)}
+
+/* Status ring */
+.status-ring-wrap{position:relative;width:220px;height:220px;margin:0 auto 36px}
+.ring-svg{position:absolute;inset:0;width:100%;height:100%}
+.ring-track{fill:none;stroke:rgba(255,255,255,0.06);stroke-width:8}
+.ring-progress{fill:none;stroke-width:8;stroke-linecap:round;transform:rotate(-90deg);transform-origin:50% 50%;transition:stroke-dashoffset 1s linear, stroke 0.5s}
+.ring-inner{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.ring-time{font-size:46px;font-weight:800;letter-spacing:-2px;font-variant-numeric:tabular-nums;line-height:1}
+.ring-label{font-size:12px;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.6px}
+
+/* Info chips */
+.info-chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:32px;min-height:32px}
+.chip{padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:5px}
+.chip-retard{background:rgba(217,48,37,0.15);color:#ff7b72;border:1px solid rgba(217,48,37,0.2)}
+.chip-pause{background:rgba(2,119,189,0.15);color:#64b5f6;border:1px solid rgba(2,119,189,0.2)}
+.chip-arrive{background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);border:1px solid rgba(255,255,255,0.08)}
+.chip-done{background:rgba(106,27,154,0.15);color:#ce93d8;border:1px solid rgba(106,27,154,0.2)}
+
+/* Buttons */
+.btn-area{width:100%;max-width:340px;display:flex;flex-direction:column;gap:12px}
+.btn-clock{width:100%;padding:20px;border-radius:18px;font-size:18px;font-weight:700;border:none;cursor:pointer;font-family:inherit;transition:transform 0.1s,opacity 0.15s;letter-spacing:-0.3px}
+.btn-clock:active{transform:scale(0.96)}
+.btn-start{background:#008160;color:white}
+.btn-stop{background:#d93025;color:white}
+.btn-pause{background:rgba(2,119,189,0.25);color:#90caf9;border:1.5px solid rgba(2,119,189,0.3)}
+.btn-resume{background:rgba(2,119,189,0.8);color:white}
+.btn-neutral{background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.5);border:1px solid rgba(255,255,255,0.1);font-size:14px;padding:14px}
+
+/* Summary card */
+.summary-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;width:100%;max-width:340px;margin-bottom:24px;text-align:left}
+.summary-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06)}
+.summary-row:last-child{border-bottom:none}
+.summary-row .s-label{font-size:13px;color:rgba(255,255,255,0.4)}
+.summary-row .s-value{font-size:14px;font-weight:700;color:white}
+.summary-row .s-value.ok{color:#66bb6a}
+.summary-row .s-value.warn{color:#ff7b72}
+
+/* No access */
+.no-access{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;min-height:100dvh;padding:40px;text-align:center;gap:16px}
+.no-access .icon{font-size:52px}
+.no-access p{font-size:15px;color:rgba(255,255,255,0.5);max-width:280px;line-height:1.5}
+
+/* ---- BOTTOM NAV ---- */
+.clock-screen{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;background:#131312}
+.bottom-nav{display:flex;background:#1a1a18;border-top:1px solid rgba(255,255,255,0.08);flex-shrink:0;padding-bottom:env(safe-area-inset-bottom,0)}
+.bottom-tab{flex:1;padding:11px 8px 9px;background:transparent;border:none;color:rgba(255,255,255,0.35);cursor:pointer;font-family:inherit;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;display:flex;flex-direction:column;align-items:center;gap:3px;transition:color 0.15s}
+.bottom-tab .tab-icon{font-size:22px;line-height:1}
+.bottom-tab.active{color:#FF622C}
+.bottom-tab:active{opacity:0.7}
+
+/* ---- CONGÉS SCREEN ---- */
+.conges-body{flex:1;overflow-y:auto;padding:20px 20px 32px;-webkit-overflow-scrolling:touch}
+.balance-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+.balance-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:16px;text-align:center}
+.balance-val{font-size:38px;font-weight:800;letter-spacing:-1px;margin-bottom:2px;line-height:1}
+.balance-label{font-size:11px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px}
+.balance-detail{font-size:10px;color:rgba(255,255,255,0.25);line-height:1.6}
+.val-cp{color:#42a5f5}.val-recup{color:#ce93d8}
+.btn-new-leave{width:100%;padding:16px;background:#FF622C;color:white;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:20px;font-family:inherit;transition:background 0.15s}
+.btn-new-leave:active{background:#d94f20}
+.leave-section-title{font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.6px;font-weight:700}
+.leave-list{display:flex;flex-direction:column;gap:10px}
+.leave-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:14px}
+.leave-card-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.leave-type-badge{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase}
+.ltype-cp{background:rgba(66,165,245,0.15);color:#64b5f6}
+.ltype-recup{background:rgba(206,147,216,0.15);color:#ce93d8}
+.leave-status-badge{padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase}
+.lstatus-pending_ka,.lstatus-pending_admin{background:rgba(245,124,0,0.15);color:#ffb74d}
+.lstatus-approved{background:rgba(0,129,96,0.15);color:#66bb6a}
+.lstatus-rejected{background:rgba(217,48,37,0.15);color:#ff7b72}
+.leave-dates{font-size:13px;color:rgba(255,255,255,0.75);font-weight:600;margin-bottom:4px}
+.leave-meta{font-size:11px;color:rgba(255,255,255,0.3);line-height:1.5}
+
+/* ---- LEAVE FORM (bottom sheet) ---- */
+.leave-form-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;display:flex;align-items:flex-end}
+.leave-form-sheet{background:#1c1c1a;border-radius:20px 20px 0 0;padding:24px;width:100%;max-height:88vh;overflow-y:auto;border-top:1px solid rgba(255,255,255,0.1)}
+.leave-form-title{font-size:17px;font-weight:800;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center}
+.leave-type-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.leave-type-opt{padding:14px 10px;border-radius:12px;border:2px solid rgba(255,255,255,0.1);cursor:pointer;text-align:center;background:rgba(255,255,255,0.03);transition:all 0.15s}
+.leave-type-opt.selected{border-color:#FF622C;background:rgba(255,98,44,0.1)}
+.lt-icon{font-size:26px;margin-bottom:4px}
+.lt-name{font-size:13px;font-weight:700;color:white}
+.lt-bal{font-size:11px;color:rgba(255,255,255,0.35);margin-top:3px}
+.leave-field{margin-bottom:14px}
+.leave-field label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:rgba(255,255,255,0.35);margin-bottom:8px}
+.leave-field input,.leave-field textarea{width:100%;padding:13px 14px;background:rgba(255,255,255,0.06);border:1.5px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:15px;outline:none;font-family:inherit;transition:border-color 0.15s;-webkit-appearance:none}
+.leave-field input:focus,.leave-field textarea:focus{border-color:#FF622C;background:rgba(255,98,44,0.05)}
+.days-count{text-align:center;padding:12px;background:rgba(255,255,255,0.04);border-radius:10px;margin-bottom:14px;font-size:14px;color:rgba(255,255,255,0.55)}
+.days-count strong{font-size:24px;font-weight:800;color:white;margin-right:4px}
+.btn-submit-leave{width:100%;padding:17px;background:#FF622C;color:white;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;transition:background 0.15s,opacity 0.15s;margin-bottom:10px}
+.btn-submit-leave:disabled{opacity:0.35;cursor:not-allowed}
+.btn-cancel-leave{width:100%;padding:14px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.45);border:none;border-radius:14px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+  </style>
+</head>
+<body>
+<script>
+// ================================================================
+// CONFIG SUPABASE (mêmes que l'application principale)
+// ================================================================
+const SB_URL = 'https://jqunhuyvkojbwabhopxo.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxdW5odXl2a29qYndhYmhvcHhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4Mjg5MDgsImV4cCI6MjA5MTQwNDkwOH0.DHCry642LW8YoRzarwHt1T8fo__9c-Xnrypa2QuTpdU';
+
+let SB = null;
+let session = null;
+let employee = null;
+let schedule = null;
+let todayShift = null;
+let timerInterval = null;
+let currentTab = 'pointage';
+let leaveBalance = null;
+let leaveRequests = [];
+let myPointage = [];
+let allHolidays = [];
+let siteCoords = null; // {latitude, longitude, geofence_radius}
+let todayPointage = null; // entrée sh_pointage pour aujourd'hui (type: travaille|double|off|…)
+
+// ================================================================
+// UTILITAIRES
+// ================================================================
+const DAY_FR = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+const MON_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+
+function pad2(n) { return String(n).padStart(2,'0'); }
+function uid() { return Date.now().toString(36)+Math.random().toString(36).substr(2,5); }
+function nowISO() { return new Date().toISOString(); }
+function todayStr() { const n=new Date(); return `${n.getFullYear()}-${pad2(n.getMonth()+1)}-${pad2(n.getDate())}`; }
+function timeNow() { const n=new Date(); return pad2(n.getHours())+':'+pad2(n.getMinutes()); }
+
+function fmtMinutes(min) {
+  if(!min||min<=0) return '0h00';
+  const h=Math.floor(min/60), m=min%60;
+  return `${h>0?h+'h':''}${pad2(m)}${h>0?'':'min'}`;
+}
+function fmtMinutesShort(min) {
+  if(!min||min<=0) return '0h00';
+  const h=Math.floor(min/60), m=min%60;
+  return `${h}h${pad2(m)}`;
+}
+function timeToMins(t) { if(!t)return 0; const [h,m]=t.split(':').map(Number); return h*60+m; }
+
+async function sha256(str) {
+  const buf = new TextEncoder().encode(str);
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function slugify(s) {
+  return (s||'').trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9]/g,'.');
+}
+
+// ================================================================
+// PAUSE STATE (stockée dans localStorage pour persistance)
+// ================================================================
+function getPause() {
+  try { return JSON.parse(localStorage.getItem('sh_clock_pause')||'null'); } catch { return null; }
+}
+function setPause(s) {
+  if(s) localStorage.setItem('sh_clock_pause', JSON.stringify(s));
+  else localStorage.removeItem('sh_clock_pause');
+}
+function getTotalPauseMs() {
+  const ps = getPause();
+  if(!ps) return 0;
+  let ms = ps.totalMs || 0;
+  if(ps.start) ms += Date.now() - new Date(ps.start).getTime();
+  return ms;
+}
+
+// ================================================================
+// GÉOLOCALISATION — Haversine + vérification périmètre site
+// ================================================================
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000; // rayon Terre en mètres
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function checkGeofence() {
+  // Si aucune coordonnée configurée pour le site, pointage autorisé sans restriction
+  if(!siteCoords?.latitude || !siteCoords?.longitude) return Promise.resolve({ok:true});
+
+  const radius = siteCoords.geofence_radius || 50;
+
+  if(!navigator.geolocation) {
+    return Promise.resolve({ok:false, reason:'La géolocalisation n\'est pas disponible sur cet appareil.'});
+  }
+
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const dist = haversineDistance(
+          pos.coords.latitude, pos.coords.longitude,
+          siteCoords.latitude, siteCoords.longitude
+        );
+        const distInt = Math.round(dist);
+        if(dist <= radius) {
+          resolve({ok:true, dist:distInt});
+        } else {
+          resolve({
+            ok: false,
+            dist: distInt,
+            reason: `Vous êtes à ${distInt}m de votre site (limite : ${radius}m).\nVeuillez vous rapprocher pour pouvoir pointer.`
+          });
+        }
+      },
+      (err) => {
+        let msg = 'Impossible d\'obtenir votre position GPS.';
+        if(err.code === 1) msg = 'Accès à la géolocalisation refusé.\nAutorisez la localisation dans les réglages de votre téléphone puis réessayez.';
+        else if(err.code === 2) msg = 'Position introuvable. Vérifiez que le GPS est activé et que vous êtes dans une zone couverte.';
+        else if(err.code === 3) msg = 'Délai dépassé pour obtenir votre position. Réessayez.';
+        resolve({ok:false, reason:msg});
+      },
+      { enableHighAccuracy:true, timeout:12000, maximumAge:0 }
+    );
+  });
+}
+
+// ================================================================
+// CONGÉS — Fonctions utilitaires
+// ================================================================
+function countWorkDays(dateFrom, dateTo) {
+  if(!dateFrom||!dateTo||dateTo<dateFrom) return 0;
+  let count = 0;
+  const d = new Date(dateFrom + 'T00:00:00');
+  const end = new Date(dateTo + 'T00:00:00');
+  while(d <= end) {
+    const dow = d.getDay();
+    if(dow !== 0) { // Dimanche exclu
+      const ds = d.toISOString().split('T')[0];
+      if(!allHolidays.includes(ds)) count++;
+    }
+    d.setDate(d.getDate()+1);
+  }
+  return count;
+}
+
+function fmtDateFR(ds) {
+  if(!ds) return '—';
+  const parts = ds.split('T')[0].split('-');
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+function calcCPSolde() {
+  const initial = Number(leaveBalance?.cp_initial||0);
+  const dateRef = leaveBalance?.date_reference;
+  let acquis = 0;
+  if(dateRef) {
+    const ref = new Date(dateRef+'T00:00:00');
+    const now = new Date();
+    const months = Math.max(0,(now.getFullYear()-ref.getFullYear())*12+(now.getMonth()-ref.getMonth()));
+    acquis = Math.round(months*1.5*2)/2; // arrondi à 0.5
+  }
+  const pris = leaveRequests.filter(r=>r.type==='cp'&&r.status==='approved').reduce((s,r)=>s+Number(r.nb_jours||0),0);
+  return {initial, acquis, pris, solde:Math.max(0,initial+acquis-pris)};
+}
+
+function calcRECUPSolde() {
+  const initial = Number(leaveBalance?.recup_initial||0);
+  const feries = myPointage.filter(p=>allHolidays.includes(p.date)&&['travaille','double'].includes(p.type)).length;
+  const pris = leaveRequests.filter(r=>r.type==='recup'&&r.status==='approved').reduce((s,r)=>s+Number(r.nb_jours||0),0);
+  return {initial, acquis:feries, pris, solde:Math.max(0,initial+feries-pris)};
+}
+
+// ================================================================
+// APP
+// ================================================================
+const ClockApp = {
+
+  async init() {
+    // Check browser compatibility
+    if(!window.crypto?.subtle) {
+      document.body.innerHTML=`<div class="no-access">
+        <div class="icon">⚠️</div>
+        <p>Ce navigateur n'est pas compatible. Ouvrez ce lien dans <strong>Safari</strong> (iPhone) ou <strong>Chrome</strong> (Android).</p>
+        <p style="font-size:11px;color:rgba(255,255,255,0.2);margin-top:12px;word-break:break-all">${location.href}</p>
+      </div>`;
+      return;
+    }
+
+    this.showLoading();
+
+    try {
+      const {createClient} = window.supabase;
+      SB = createClient(SB_URL, SB_KEY);
+    } catch(e) {
+      this.showError('Erreur de chargement. Vérifiez votre connexion internet.', e.message);
+      return;
+    }
+
+    // Restore session
+    try { const s=localStorage.getItem('sh_clock_session'); if(s) session=JSON.parse(s); } catch {}
+
+    if(session?.id) {
+      await this.loadData(true);
+    } else {
+      this.showLogin();
+    }
+  },
+
+  showLoading(msg='Chargement...') {
+    document.body.innerHTML=`<div class="loading-screen"><div class="spinner"></div><div class="loading-text">${msg}</div></div>`;
+  },
+
+  showError(msg, detail='') {
+    document.body.innerHTML=`<div class="no-access">
+      <div class="icon">⚠️</div>
+      <p>${msg}</p>
+      ${detail?`<p style="font-size:11px;color:rgba(255,255,255,0.2)">${detail}</p>`:''}
+      <button onclick="location.reload()" style="background:#FF622C;color:white;border:none;padding:14px 28px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px">Réessayer</button>
+    </div>`;
+  },
+
+  showLogin() {
+    if(timerInterval) { clearInterval(timerInterval); timerInterval=null; }
+    document.body.innerHTML=`
+    <div class="login-wrap">
+      <div class="login-logo">
+        <div class="logo-mark">⏱</div>
+        <h1>StayHere</h1>
+        <p>Application de Pointage</p>
+      </div>
+      <div class="login-card">
+        <div class="error-box" id="login-err"></div>
+        <div class="field">
+          <label>Identifiant</label>
+          <input id="un" type="text" autocomplete="username" placeholder="ex: p.dupont" inputmode="text">
+        </div>
+        <div class="field">
+          <label>Mot de passe</label>
+          <input id="pw" type="password" autocomplete="current-password" placeholder="••••••••">
+        </div>
+        <button class="btn-login" onclick="ClockApp.login()">Se connecter</button>
+      </div>
+      <a href="index.html" class="main-link">← Application principale</a>
+    </div>`;
+    document.getElementById('pw').addEventListener('keydown', e => { if(e.key==='Enter') ClockApp.login(); });
+    document.getElementById('un').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('pw').focus(); });
+  },
+
+  async login() {
+    const username = (document.getElementById('un')?.value||'').trim();
+    const password = document.getElementById('pw')?.value||'';
+    if(!username||!password) return;
+
+    const btn = document.querySelector('.btn-login');
+    if(btn) { btn.textContent='Connexion...'; btn.disabled=true; }
+
+    const hash = await sha256(password);
+
+    try {
+      const {data:users,error} = await SB.from('sh_users').select('*');
+      if(error) throw error;
+
+      const user = (users||[]).find(u=>u.username.toLowerCase()===username.toLowerCase()&&u.password_hash===hash)||null;
+      const errEl = document.getElementById('login-err');
+
+      if(!user) {
+        if(errEl){errEl.textContent='Identifiant ou mot de passe incorrect.';errEl.style.display='block';}
+        if(btn){btn.textContent='Se connecter';btn.disabled=false;}
+        return;
+      }
+      if(user.acces_horloge===false) {
+        if(errEl){errEl.textContent='Vous n\'avez pas accès à l\'application de pointage mobile. Contactez votre administrateur.';errEl.style.display='block';}
+        if(btn){btn.textContent='Se connecter';btn.disabled=false;}
+        return;
+      }
+
+      session = user;
+      localStorage.setItem('sh_clock_session', JSON.stringify(user));
+      await this.loadData(false);
+    } catch(e) {
+      const errEl=document.getElementById('login-err');
+      if(errEl){errEl.textContent='Erreur de connexion : '+e.message;errEl.style.display='block';}
+      if(btn){btn.textContent='Se connecter';btn.disabled=false;}
+    }
+  },
+
+  async loadData(quiet=false) {
+    if(!quiet) this.showLoading('Chargement des données...');
+
+    try {
+      // Re-validate session and check access
+      const {data:users} = await SB.from('sh_users').select('*').eq('id',session.id);
+      if(!users?.length) { session=null; localStorage.removeItem('sh_clock_session'); this.showLogin(); return; }
+      session = users[0];
+      localStorage.setItem('sh_clock_session', JSON.stringify(session));
+
+      if(session.acces_horloge===false) { this.showNoAccess(); return; }
+
+      // Find linked employee
+      employee = null; schedule = null; todayShift = null;
+
+      // Priority 1: employee_id stored on user record
+      if(session.employee_id) {
+        const {data:emps} = await SB.from('sh_employees').select('*').eq('id',session.employee_id);
+        employee = emps?.[0] || null;
+      }
+
+      // Priority 2: match by username convention (p.nom format) + site_id
+      if(!employee) {
+        const {data:allEmps} = await SB.from('sh_employees').select('*').eq('actif',true);
+        employee = (allEmps||[]).find(e=>{
+          const expected = slugify(e.prenom).charAt(0)+'.'+slugify(e.nom);
+          return expected===session.username.toLowerCase();
+        })||null;
+        // Priority 3: if site_id matches and only one employee, use it (for KA only)
+        if(!employee && session.site_id) {
+          const siteEmps = (allEmps||[]).filter(e=>e.site_id===session.site_id&&e.actif);
+          if(siteEmps.length===1) employee=siteEmps[0];
+        }
+      }
+
+      if(employee) {
+        const [schedData, shiftData, holData, balData, reqData, ptData, siteData] = await Promise.all([
+          SB.from('sh_schedules').select('*').eq('employee_id',employee.id),
+          SB.from('sh_shifts').select('*').eq('employee_id',employee.id).eq('date',todayStr()),
+          SB.from('sh_holidays').select('date'),
+          SB.from('sh_leave_balances').select('*').eq('employee_id',employee.id),
+          SB.from('sh_leave_requests').select('*').eq('employee_id',employee.id).order('created_at',{ascending:false}),
+          SB.from('sh_pointage').select('date,type').eq('employee_id',employee.id),
+          employee.site_id
+            ? SB.from('sh_sites').select('latitude,longitude,geofence_radius').eq('id',employee.site_id)
+            : Promise.resolve({data:null}),
+        ]);
+        schedule = schedData.data?.[0] || null;
+        todayShift = shiftData.data?.[0] || null;
+        allHolidays = (holData.data||[]).map(h=>h.date);
+        leaveBalance = balData.data?.[0] || null;
+        leaveRequests = reqData.data || [];
+        myPointage = ptData.data || [];
+        todayPointage = myPointage.find(p => p.date === todayStr()) || null;
+        siteCoords = siteData?.data?.[0] || null;
+      } else {
+        const {data:holData} = await SB.from('sh_holidays').select('date');
+        allHolidays = (holData||[]).map(h=>h.date);
+      }
+
+      this.renderClock();
+    } catch(e) {
+      this.showError('Erreur de connexion.', e.message);
+    }
+  },
+
+  showNoAccess() {
+    document.body.innerHTML=`<div class="no-access">
+      <div class="icon">🚫</div>
+      <p>Vous n'avez pas accès à l'application de pointage mobile.<br>Contactez votre administrateur.</p>
+      <button onclick="ClockApp.logout()" style="background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.5);border:none;padding:12px 24px;border-radius:10px;font-size:13px;cursor:pointer;margin-top:8px">Se déconnecter</button>
+    </div>`;
+  },
+
+  // ---- STATUS COMPUTATION ----
+  getStatus() {
+    if(!todayShift?.heure_arrivee) return 'not_started';
+    if(todayShift.heure_arrivee && !todayShift.heure_depart) {
+      return getPause()?.start ? 'paused' : 'active';
+    }
+    return 'done';
+  },
+
+  getElapsedMins() {
+    if(!todayShift?.heure_arrivee) return 0;
+    const today = todayStr();
+    const [ah,am] = todayShift.heure_arrivee.split(':').map(Number);
+    const arrMs = new Date(today+'T'+pad2(ah)+':'+pad2(am)+':00').getTime();
+    const workedMs = Math.max(0, Date.now()-arrMs) - getTotalPauseMs();
+    return Math.max(0, Math.floor(workedMs/60000));
+  },
+
+  getPausedMins() { return Math.floor(getTotalPauseMs()/60000); },
+
+  getRetardMins() {
+    if(!schedule||!todayShift?.heure_arrivee) return 0;
+    const [sh,sm]=schedule.heure_debut.split(':').map(Number);
+    const [ah,am]=todayShift.heure_arrivee.split(':').map(Number);
+    return Math.max(0,(ah*60+am)-(sh*60+sm));
+  },
+
+  getCountdown() {
+    if(!schedule) return null;
+    const now=new Date();
+    const nowMins=now.getHours()*60+now.getMinutes();
+    const [sh,sm]=schedule.heure_debut.split(':').map(Number);
+    const startMins=sh*60+sm;
+    return startMins-nowMins; // Positive = minutes until start, negative = late
+  },
+
+  // ---- RING DISPLAY ----
+  getRingConfig() {
+    const status=this.getStatus();
+    const schedDur = schedule ? timeToMins(schedule.heure_fin)-timeToMins(schedule.heure_debut) : 480;
+
+    if(status==='not_started') {
+      const cd=this.getCountdown();
+      if(cd===null) return {time:timeNow(),label:'Heure actuelle',color:'rgba(255,255,255,0.15)',progress:0};
+      if(cd>0) {
+        const h=Math.floor(cd/60),m=cd%60;
+        const text=h>0?`${h}h${pad2(m)}`:`${m}min`;
+        return {time:text,label:'Avant le début',color:'#f57c00',progress:Math.max(0,1-(cd/(60)))*100};
+      }
+      const late=Math.abs(cd);
+      return {time:`+${fmtMinutesShort(late)}`,label:'En retard',color:'#d93025',progress:100};
+    }
+    if(status==='active') {
+      const elapsed=this.getElapsedMins();
+      const pct=Math.min(100,schedDur?((elapsed/schedDur)*100):0);
+      return {time:fmtMinutesShort(elapsed),label:'Temps travaillé',color:'#00c792',progress:pct};
+    }
+    if(status==='paused') {
+      const pausedMins=this.getPausedMins();
+      return {time:fmtMinutesShort(pausedMins),label:'En pause',color:'#42a5f5',progress:0,pulse:true};
+    }
+    if(status==='done') {
+      const duree=todayShift.duree_minutes||0;
+      const pct=Math.min(100,schedDur?((duree/schedDur)*100):100);
+      return {time:fmtMinutesShort(duree),label:'Shift terminé',color:'#ce93d8',progress:pct};
+    }
+    return {time:'--',label:'',color:'rgba(255,255,255,0.1)',progress:0};
+  },
+
+  // ---- RENDER ----
+  renderClock() {
+    if(timerInterval) { clearInterval(timerInterval); timerInterval=null; }
+
+    const status=this.getStatus();
+    const empName=employee?`${employee.prenom} ${employee.nom}`:session.nom;
+    const empSub=employee?employee.poste:session.username;
+    const schedLine=schedule
+      ?`Planning : <strong>${schedule.heure_debut} → ${schedule.heure_fin}</strong>`
+      :'<span style="color:rgba(255,165,0,0.6)">Aucun planning configuré</span>';
+
+    const now=new Date();
+    const dateLabel=`${DAY_FR[now.getDay()]} ${now.getDate()} ${MON_FR[now.getMonth()]} ${now.getFullYear()}`;
+    const CIRC=283; // 2*PI*45
+
+    let buttons='', chips='', summaryHtml='';
+    const retard=this.getRetardMins();
+    const pausedMins=this.getPausedMins();
+
+    // Chips
+    if(todayShift?.heure_arrivee) {
+      chips+=`<div class="chip chip-arrive">🕐 Arrivée ${todayShift.heure_arrivee}${retard>0?` <span style="color:#ff7b72">+${fmtMinutes(retard)}</span>`:''}</div>`;
+    }
+    if(retard>0&&status==='active') {
+      chips+=`<div class="chip chip-retard">⚠ Retard : +${fmtMinutes(retard)}</div>`;
+    }
+    if((status==='active'||status==='paused')&&pausedMins>0) {
+      chips+=`<div class="chip chip-pause">⏸ Pause : ${fmtMinutes(pausedMins)}</div>`;
+    }
+    if(status==='done') {
+      chips+=`<div class="chip chip-done">✓ Terminé à ${todayShift.heure_depart}</div>`;
+    }
+
+    // Buttons
+    if(status==='not_started') {
+      if(todayPointage?.type==='off') {
+        buttons=`<div style="text-align:center;padding:12px 0">
+          <div style="font-size:44px;margin-bottom:12px">🌙</div>
+          <div style="font-size:19px;font-weight:700;color:rgba(255,255,255,0.65)">Jour de repos</div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.3);margin-top:6px">Vous n'avez pas de shift prévu aujourd'hui</div>
+        </div>`;
+      } else {
+        buttons=`<button class="btn-clock btn-start" onclick="ClockApp.startShift()">▶ &nbsp;Pointer l'arrivée</button>`;
+        if(!employee) buttons+=`<div style="font-size:12px;color:rgba(255,165,0,0.7);margin-top:8px;text-align:center">Aucun profil collaborateur lié à ce compte. Contactez l'administrateur.</div>`;
+      }
+    } else if(status==='active') {
+      buttons=`
+        <button class="btn-clock btn-pause" onclick="ClockApp.pauseShift()">⏸ &nbsp;Mettre en pause</button>
+        <button class="btn-clock btn-stop" onclick="ClockApp.confirmStop()">⏹ &nbsp;Pointer le départ</button>`;
+    } else if(status==='paused') {
+      buttons=`
+        <button class="btn-clock btn-resume" onclick="ClockApp.resumeShift()">▶ &nbsp;Reprendre le shift</button>
+        <button class="btn-clock btn-stop" onclick="ClockApp.confirmStop()">⏹ &nbsp;Pointer le départ</button>`;
+    } else if(status==='done') {
+      const dur=todayShift.duree_minutes||0;
+      const pause=todayShift.pause_minutes||0;
+      summaryHtml=`<div class="summary-card">
+        <div class="summary-row"><span class="s-label">Arrivée</span><span class="s-value">${todayShift.heure_arrivee}</span></div>
+        <div class="summary-row"><span class="s-label">Départ</span><span class="s-value">${todayShift.heure_depart}</span></div>
+        ${retard>0?`<div class="summary-row"><span class="s-label">Retard</span><span class="s-value warn">+${fmtMinutes(retard)}</span></div>`:''}
+        ${pause>0?`<div class="summary-row"><span class="s-label">Pause totale</span><span class="s-value">${fmtMinutes(pause)}</span></div>`:''}
+        <div class="summary-row"><span class="s-label">Temps travaillé</span><span class="s-value ok">${fmtMinutes(dur)}</span></div>
+      </div>`;
+      buttons=`<button class="btn-clock btn-neutral" onclick="ClockApp.loadData(false)">↻ Actualiser</button>`;
+    }
+
+    document.body.innerHTML=`
+    <div class="clock-screen">
+      <div class="clock-header">
+        <div class="user-info">
+          <div class="user-name">${empName}</div>
+          <div class="user-sub">${empSub}</div>
+        </div>
+        <div class="header-actions">
+          <button class="btn-sm-icon" onclick="ClockApp.showChangePwd()" title="Changer mon mot de passe">🔑</button>
+          <button class="btn-sm-ghost" onclick="ClockApp.logout()">Déconnexion</button>
+        </div>
+      </div>
+      <div class="clock-body" id="tab-body">
+        <div class="clock-date">${dateLabel}</div>
+        <div class="schedule-line">${schedLine}</div>
+        <div class="status-ring-wrap" id="ring-wrap">
+          <svg class="ring-svg" viewBox="0 0 100 100">
+            <circle class="ring-track" cx="50" cy="50" r="45"/>
+            <circle class="ring-progress" id="ring-prog" cx="50" cy="50" r="45"
+              stroke-dasharray="${CIRC}" stroke-dashoffset="${CIRC}" stroke="rgba(255,255,255,0.1)"/>
+          </svg>
+          <div class="ring-inner">
+            <div class="ring-time" id="ring-time">--</div>
+            <div class="ring-label" id="ring-label"></div>
+          </div>
+        </div>
+        <div class="info-chips" id="info-chips">${chips}</div>
+        ${summaryHtml}
+        <div class="btn-area">${buttons}</div>
+      </div>
+      <div class="bottom-nav">
+        <button class="bottom-tab active" onclick="ClockApp.switchTab('pointage')">
+          <div class="tab-icon">⏱</div><div>Pointage</div>
+        </button>
+        <button class="bottom-tab" onclick="ClockApp.switchTab('conges')">
+          <div class="tab-icon">🏖</div><div>Congés</div>
+        </button>
+      </div>
+    </div>`;
+
+    this._updateRing();
+    timerInterval = setInterval(()=>this._tick(), 1000);
+  },
+
+  _updateRing() {
+    const cfg=this.getRingConfig();
+    const CIRC=283;
+    const offset=CIRC-(CIRC*(cfg.progress/100));
+
+    const timeEl=document.getElementById('ring-time');
+    const labelEl=document.getElementById('ring-label');
+    const progEl=document.getElementById('ring-prog');
+
+    if(timeEl) timeEl.textContent=cfg.time;
+    if(labelEl) labelEl.textContent=cfg.label;
+    if(progEl) {
+      progEl.style.strokeDashoffset=offset;
+      progEl.style.stroke=cfg.color;
+    }
+  },
+
+  _tick() {
+    const status=this.getStatus();
+    this._updateRing();
+    // Update pause chip if active
+    if(status==='active'||status==='paused') {
+      const chipsEl=document.getElementById('info-chips');
+      if(chipsEl) {
+        const retard=this.getRetardMins();
+        const pausedMins=this.getPausedMins();
+        let c='';
+        if(todayShift?.heure_arrivee) c+=`<div class="chip chip-arrive">🕐 Arrivée ${todayShift.heure_arrivee}${retard>0?` <span style="color:#ff7b72">+${fmtMinutes(retard)}</span>`:''}</div>`;
+        if(retard>0&&status==='active') c+=`<div class="chip chip-retard">⚠ Retard : +${fmtMinutes(retard)}</div>`;
+        if(pausedMins>0) c+=`<div class="chip chip-pause">⏸ Pause : ${fmtMinutes(pausedMins)}</div>`;
+        chipsEl.innerHTML=c;
+      }
+    }
+  },
+
+  // ---- SHIFT ACTIONS ----
+  async startShift() {
+    if(!employee) { alert('Aucun profil collaborateur associé à votre compte. Contactez votre administrateur.'); return; }
+
+    // Blocage si jour de repos (défini dans le planning)
+    if(todayPointage?.type==='off') {
+      alert('🌙 Jour de repos\n\nAujourd\'hui est votre jour de repos. Le pointage n\'est pas autorisé.');
+      return;
+    }
+
+    // Vérification géolocalisation
+    const btnArea = document.querySelector('.btn-area');
+    const origHTML = btnArea ? btnArea.innerHTML : '';
+    if(btnArea) btnArea.innerHTML = `<div style="text-align:center;color:rgba(255,255,255,0.45);font-size:13px;padding:24px 0;display:flex;align-items:center;justify-content:center;gap:10px"><div class="spinner" style="width:18px;height:18px;border-width:2px"></div>Vérification de la position…</div>`;
+
+    const geo = await checkGeofence();
+
+    if(!geo.ok) {
+      if(btnArea) btnArea.innerHTML = origHTML;
+      alert('📍 Pointage impossible\n\n' + geo.reason);
+      return;
+    }
+
+    setPause(null);
+    const heure=timeNow();
+    const today=todayStr();
+    const [ah,am]=heure.split(':').map(Number);
+    const retard=schedule?Math.max(0,(ah*60+am)-timeToMins(schedule.heure_debut)):0;
+
+    try {
+      if(todayShift) {
+        await SB.from('sh_shifts').update({
+          heure_arrivee:heure,retard_minutes:retard,
+          updated_by:session.username,updated_at:nowISO()
+        }).eq('id',todayShift.id);
+        todayShift={...todayShift,heure_arrivee:heure,retard_minutes:retard};
+      } else {
+        const rec={
+          id:uid(),employee_id:employee.id,site_id:employee.site_id,date:today,
+          heure_arrivee:heure,heure_depart:null,
+          heure_debut_prevue:schedule?.heure_debut||null,
+          heure_fin_prevue:schedule?.heure_fin||null,
+          retard_minutes:retard,duree_minutes:0,pause_minutes:0,
+          validated_by_ka:null,validated_at_ka:null,
+          created_by:session.username,created_at:nowISO(),
+          updated_by:null,updated_at:null
+        };
+        const {error}=await SB.from('sh_shifts').upsert(rec,{onConflict:'employee_id,date'});
+        if(error) throw error;
+        todayShift=rec;
+      }
+      this.renderClock();
+    } catch(e) { alert('Erreur lors du pointage : '+e.message); }
+  },
+
+  pauseShift() {
+    const ps=getPause()||{totalMs:0};
+    ps.start=nowISO();
+    setPause(ps);
+    this.renderClock();
+  },
+
+  resumeShift() {
+    const ps=getPause();
+    if(!ps?.start) return;
+    const addMs=Date.now()-new Date(ps.start).getTime();
+    setPause({totalMs:(ps.totalMs||0)+addMs,start:null});
+    this.renderClock();
+  },
+
+  async confirmStop() {
+    // Vérification géolocalisation
+    const btnArea = document.querySelector('.btn-area');
+    const origHTML = btnArea ? btnArea.innerHTML : '';
+    if(btnArea) btnArea.innerHTML = `<div style="text-align:center;color:rgba(255,255,255,0.45);font-size:13px;padding:24px 0;display:flex;align-items:center;justify-content:center;gap:10px"><div class="spinner" style="width:18px;height:18px;border-width:2px"></div>Vérification de la position…</div>`;
+
+    const geo = await checkGeofence();
+
+    if(btnArea) btnArea.innerHTML = origHTML;
+
+    if(!geo.ok) {
+      alert('📍 Pointage impossible\n\n' + geo.reason);
+      return;
+    }
+
+    const heure=timeNow();
+    const elapsed=this.getElapsedMins();
+    const pauseMin=this.getPausedMins();
+    const msg=`Pointer le départ à ${heure} ?\n\n⏱ Temps travaillé : ${fmtMinutes(elapsed)}${pauseMin>0?'\n⏸ Pause : '+fmtMinutes(pauseMin):''}`;
+    if(!confirm(msg)) return;
+    this.stopShift(heure);
+  },
+
+  async stopShift(heure) {
+    if(!todayShift?.heure_arrivee) return;
+
+    // Finalize any open pause
+    const ps=getPause();
+    if(ps?.start) {
+      const addMs=Date.now()-new Date(ps.start).getTime();
+      setPause({totalMs:(ps.totalMs||0)+addMs,start:null});
+    }
+
+    const pauseMin=this.getPausedMins();
+    const [ah,am]=todayShift.heure_arrivee.split(':').map(Number);
+    const [dh,dm]=heure.split(':').map(Number);
+    const totalMin=Math.max(0,(dh*60+dm)-(ah*60+am));
+    const workMin=Math.max(0,totalMin-pauseMin);
+
+    try {
+      await SB.from('sh_shifts').update({
+        heure_depart:heure,
+        duree_minutes:workMin,
+        pause_minutes:pauseMin,
+        updated_by:session.username,
+        updated_at:nowISO()
+      }).eq('id',todayShift.id);
+
+      // NOTE : Aucune entrée sh_pointage n'est créée ici automatiquement.
+      // Le shift (sh_shifts) enregistre les données brutes de présence.
+      // La création et la validation du pointage officiel (sh_pointage)
+      // se font exclusivement par un utilisateur autorisé dans l'application principale.
+
+      todayShift={...todayShift,heure_depart:heure,duree_minutes:workMin,pause_minutes:pauseMin};
+      setPause(null);
+      this.renderClock();
+    } catch(e) { alert('Erreur lors du pointage : '+e.message); }
+  },
+
+  // ---- TAB SWITCHING ----
+  switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.bottom-tab').forEach((b,i)=>{
+      b.classList.toggle('active', (tab==='pointage'&&i===0)||(tab==='conges'&&i===1));
+    });
+    if(tab === 'pointage') {
+      // Relancer le pointage
+      const tabBody = document.getElementById('tab-body');
+      if(tabBody) {
+        const status = this.getStatus();
+        const now = new Date();
+        const dateLabel = `${DAY_FR[now.getDay()]} ${now.getDate()} ${MON_FR[now.getMonth()]} ${now.getFullYear()}`;
+        const schedLine = schedule
+          ?`Planning : <strong>${schedule.heure_debut} → ${schedule.heure_fin}</strong>`
+          :'<span style="color:rgba(255,165,0,0.6)">Aucun planning configuré</span>';
+        const CIRC=283;
+        const retard=this.getRetardMins();
+        const pausedMins=this.getPausedMins();
+        let chips='', buttons='', summaryHtml='';
+        if(todayShift?.heure_arrivee){chips+=`<div class="chip chip-arrive">🕐 Arrivée ${todayShift.heure_arrivee}${retard>0?` <span style="color:#ff7b72">+${fmtMinutes(retard)}</span>`:''}</div>`;}
+        if(retard>0&&status==='active'){chips+=`<div class="chip chip-retard">⚠ Retard : +${fmtMinutes(retard)}</div>`;}
+        if((status==='active'||status==='paused')&&pausedMins>0){chips+=`<div class="chip chip-pause">⏸ Pause : ${fmtMinutes(pausedMins)}</div>`;}
+        if(status==='done'){chips+=`<div class="chip chip-done">✓ Terminé à ${todayShift.heure_depart}</div>`;}
+        if(status==='not_started'){if(todayPointage?.type==='off'){buttons=`<div style="text-align:center;padding:12px 0"><div style="font-size:44px;margin-bottom:12px">🌙</div><div style="font-size:19px;font-weight:700;color:rgba(255,255,255,0.65)">Jour de repos</div><div style="font-size:13px;color:rgba(255,255,255,0.3);margin-top:6px">Vous n'avez pas de shift prévu aujourd'hui</div></div>`;}else{buttons=`<button class="btn-clock btn-start" onclick="ClockApp.startShift()">▶ &nbsp;Pointer l'arrivée</button>`;if(!employee)buttons+=`<div style="font-size:12px;color:rgba(255,165,0,0.7);margin-top:8px;text-align:center">Aucun profil collaborateur lié à ce compte. Contactez l'administrateur.</div>`;}}
+        else if(status==='active'){buttons=`<button class="btn-clock btn-pause" onclick="ClockApp.pauseShift()">⏸ &nbsp;Mettre en pause</button><button class="btn-clock btn-stop" onclick="ClockApp.confirmStop()">⏹ &nbsp;Pointer le départ</button>`;}
+        else if(status==='paused'){buttons=`<button class="btn-clock btn-resume" onclick="ClockApp.resumeShift()">▶ &nbsp;Reprendre le shift</button><button class="btn-clock btn-stop" onclick="ClockApp.confirmStop()">⏹ &nbsp;Pointer le départ</button>`;}
+        else if(status==='done'){const dur=todayShift.duree_minutes||0;const pause=todayShift.pause_minutes||0;summaryHtml=`<div class="summary-card"><div class="summary-row"><span class="s-label">Arrivée</span><span class="s-value">${todayShift.heure_arrivee}</span></div><div class="summary-row"><span class="s-label">Départ</span><span class="s-value">${todayShift.heure_depart}</span></div>${retard>0?`<div class="summary-row"><span class="s-label">Retard</span><span class="s-value warn">+${fmtMinutes(retard)}</span></div>`:''}${pause>0?`<div class="summary-row"><span class="s-label">Pause totale</span><span class="s-value">${fmtMinutes(pause)}</span></div>`:''}<div class="summary-row"><span class="s-label">Temps travaillé</span><span class="s-value ok">${fmtMinutes(dur)}</span></div></div>`;buttons=`<button class="btn-clock btn-neutral" onclick="ClockApp.loadData(false)">↻ Actualiser</button>`;}
+        tabBody.innerHTML=`<div class="clock-date">${dateLabel}</div><div class="schedule-line">${schedLine}</div><div class="status-ring-wrap" id="ring-wrap"><svg class="ring-svg" viewBox="0 0 100 100"><circle class="ring-track" cx="50" cy="50" r="45"/><circle class="ring-progress" id="ring-prog" cx="50" cy="50" r="45" stroke-dasharray="${CIRC}" stroke-dashoffset="${CIRC}" stroke="rgba(255,255,255,0.1)"/></svg><div class="ring-inner"><div class="ring-time" id="ring-time">--</div><div class="ring-label" id="ring-label"></div></div></div><div class="info-chips" id="info-chips">${chips}</div>${summaryHtml}<div class="btn-area">${buttons}</div>`;
+        this._updateRing();
+        timerInterval = setInterval(()=>this._tick(), 1000);
+      }
+    } else {
+      if(timerInterval){clearInterval(timerInterval);timerInterval=null;}
+      const tabBody = document.getElementById('tab-body');
+      if(tabBody) tabBody.innerHTML = this._buildCongesBody();
+    }
+  },
+
+  // ---- CONGÉS TAB ----
+  _buildCongesBody() {
+    const cp = calcCPSolde();
+    const recup = calcRECUPSolde();
+    const statusLabels = {
+      pending_ka:'⏳ En attente KA',
+      pending_admin:'⏳ En attente Admin',
+      approved:'✓ Approuvé',
+      rejected:'✕ Refusé'
+    };
+    const reqList = leaveRequests.length === 0
+      ? '<p style="color:rgba(255,255,255,0.25);font-size:13px;text-align:center;padding:24px 0">Aucune demande</p>'
+      : leaveRequests.map(r=>`
+        <div class="leave-card">
+          <div class="leave-card-top">
+            <span class="leave-type-badge ltype-${r.type}">${r.type==='cp'?'Congé Payé':'RECUP'}</span>
+            <span class="leave-status-badge lstatus-${r.status}">${statusLabels[r.status]||r.status}</span>
+          </div>
+          <div class="leave-dates">${fmtDateFR(r.date_debut)} → ${fmtDateFR(r.date_fin)}</div>
+          <div class="leave-meta">${r.nb_jours} jour${r.nb_jours>1?'s':''} · Soumis le ${fmtDateFR(r.created_at)}</div>
+          ${r.notes?`<div class="leave-meta" style="margin-top:3px;font-style:italic">${r.notes}</div>`:''}
+          ${r.status==='rejected'&&r.rejection_reason?`<div class="leave-meta" style="color:#ff7b72;margin-top:4px">Refus : ${r.rejection_reason}</div>`:''}
+          ${r.status==='approved'?(r.ka_notes?`<div class="leave-meta" style="color:#66bb6a;margin-top:2px">KA : ${r.ka_notes}</div>`:'')+`<div class="leave-meta" style="color:#66bb6a;margin-top:2px">Validé par ${r.validated_by_admin||'admin'}</div>`:''}
+        </div>`).join('');
+    return `<div class="conges-body">
+      <div class="balance-cards">
+        <div class="balance-card">
+          <div class="balance-val val-cp">${cp.solde}</div>
+          <div class="balance-label">Jours CP</div>
+          <div class="balance-detail">Antérieur : ${cp.initial} · Acquis : ${cp.acquis}<br>Pris : ${cp.pris}</div>
+        </div>
+        <div class="balance-card">
+          <div class="balance-val val-recup">${recup.solde}</div>
+          <div class="balance-label">Jours RÉCUP</div>
+          <div class="balance-detail">Antérieur : ${recup.initial} · Fériés : ${recup.acquis}<br>Pris : ${recup.pris}</div>
+        </div>
+      </div>
+      ${employee
+        ?`<button class="btn-new-leave" onclick="ClockApp.showLeaveForm()">+ Nouvelle demande</button>`
+        :`<div style="color:rgba(255,165,0,0.7);font-size:13px;text-align:center;margin-bottom:20px;padding:14px;background:rgba(255,165,0,0.08);border-radius:12px">Aucun profil collaborateur lié.<br>Contactez votre administrateur.</div>`}
+      <div class="leave-section-title">Mes demandes</div>
+      <div class="leave-list">${reqList}</div>
+    </div>`;
+  },
+
+  showLeaveForm() {
+    if(!employee) return;
+    const cp = calcCPSolde();
+    const recup = calcRECUPSolde();
+    const today = todayStr();
+    const overlay = document.createElement('div');
+    overlay.className = 'leave-form-overlay';
+    overlay.id = 'leave-form-overlay';
+    overlay.innerHTML = `
+      <div class="leave-form-sheet">
+        <div class="leave-form-title">
+          <span>Nouvelle demande</span>
+          <button style="background:rgba(255,255,255,0.08);border:none;width:32px;height:32px;border-radius:10px;color:rgba(255,255,255,0.5);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="document.getElementById('leave-form-overlay').remove()">✕</button>
+        </div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:rgba(255,255,255,0.35);margin-bottom:8px">Type</div>
+        <div class="leave-type-row">
+          <div class="leave-type-opt selected" id="opt-cp" onclick="ClockApp._selectLeaveType('cp')">
+            <div class="lt-icon">🏖</div>
+            <div class="lt-name">Congé Payé</div>
+            <div class="lt-bal">Solde : ${cp.solde} j</div>
+          </div>
+          <div class="leave-type-opt" id="opt-recup" onclick="ClockApp._selectLeaveType('recup')">
+            <div class="lt-icon">💤</div>
+            <div class="lt-name">Récupération</div>
+            <div class="lt-bal">Solde : ${recup.solde} j</div>
+          </div>
+        </div>
+        <div class="leave-field">
+          <label>Date de début</label>
+          <input type="date" id="leave-debut" value="${today}" onchange="ClockApp._updateDaysCount()">
+        </div>
+        <div class="leave-field">
+          <label>Date de fin</label>
+          <input type="date" id="leave-fin" value="${today}" onchange="ClockApp._updateDaysCount()">
+        </div>
+        <div class="days-count" id="days-count"><strong>1</strong> jour ouvré</div>
+        <div class="leave-field">
+          <label>Motif (optionnel)</label>
+          <textarea id="leave-notes" rows="2" placeholder="Ex: Vacances familiales..." style="resize:none"></textarea>
+        </div>
+        <button class="btn-submit-leave" id="btn-submit-leave" onclick="ClockApp.submitLeaveRequest()">Soumettre la demande</button>
+        <button class="btn-cancel-leave" onclick="document.getElementById('leave-form-overlay').remove()">Annuler</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    window._leaveFormType = 'cp';
+    this._updateDaysCount();
+  },
+
+  _selectLeaveType(type) {
+    window._leaveFormType = type;
+    document.getElementById('opt-cp')?.classList.toggle('selected', type==='cp');
+    document.getElementById('opt-recup')?.classList.toggle('selected', type==='recup');
+    this._updateDaysCount();
+  },
+
+  _updateDaysCount() {
+    const debut = document.getElementById('leave-debut')?.value;
+    const fin = document.getElementById('leave-fin')?.value;
+    const el = document.getElementById('days-count');
+    const btn = document.getElementById('btn-submit-leave');
+    if(!debut||!fin||fin<debut) {
+      if(el) el.innerHTML = '<span style="color:rgba(255,165,0,0.7)">Dates invalides</span>';
+      if(btn) btn.disabled = true;
+      return;
+    }
+    const nb = countWorkDays(debut, fin);
+    if(el) el.innerHTML = nb>0?`<strong>${nb}</strong> jour${nb>1?'s':''} ouvré${nb>1?'s':''}`:`<span style="color:rgba(255,165,0,0.7)">Aucun jour ouvré dans cette période</span>`;
+    if(btn) btn.disabled = nb <= 0;
+  },
+
+  async submitLeaveRequest() {
+    if(!employee) return;
+    const debut = document.getElementById('leave-debut')?.value;
+    const fin = document.getElementById('leave-fin')?.value;
+    const notes = document.getElementById('leave-notes')?.value.trim() || '';
+    const type = window._leaveFormType || 'cp';
+    if(!debut||!fin||fin<debut) { alert('Dates invalides.'); return; }
+    const nb = countWorkDays(debut, fin);
+    if(nb<=0) { alert('Aucun jour ouvré dans cette période.'); return; }
+    const bal = type==='cp' ? calcCPSolde().solde : calcRECUPSolde().solde;
+    if(nb>bal) {
+      if(!confirm(`Votre solde ${type==='cp'?'CP':'RECUP'} est de ${bal} jour(s). Soumettre quand même ?`)) return;
+    }
+    const btn = document.getElementById('btn-submit-leave');
+    if(btn) { btn.textContent='Envoi...'; btn.disabled=true; }
+    const rec = {
+      id:uid(), employee_id:employee.id, site_id:employee.site_id,
+      type, date_debut:debut, date_fin:fin, nb_jours:nb, notes,
+      status:'pending_ka',
+      validated_by_ka:null, validated_at_ka:null, ka_notes:null,
+      validated_by_admin:null, validated_at_admin:null, admin_notes:null,
+      rejected_by:null, rejected_at:null, rejection_reason:null,
+      created_by:session.username, created_at:nowISO(), updated_at:null
+    };
+    try {
+      const {error} = await SB.from('sh_leave_requests').insert(rec);
+      if(error) throw error;
+      leaveRequests.unshift(rec);
+      document.getElementById('leave-form-overlay')?.remove();
+      const tabBody = document.getElementById('tab-body');
+      if(tabBody) tabBody.innerHTML = this._buildCongesBody();
+    } catch(e) {
+      alert('Erreur : '+e.message);
+      if(btn) { btn.textContent='Soumettre la demande'; btn.disabled=false; }
+    }
+  },
+
+  // ---- CHANGEMENT DE MOT DE PASSE ----
+  showChangePwd() {
+    // Supprimer un éventuel overlay déjà ouvert
+    document.getElementById('pwd-overlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.className = 'leave-form-overlay';
+    overlay.id = 'pwd-overlay';
+    overlay.innerHTML = `
+      <div class="leave-form-sheet">
+        <div class="leave-form-title">
+          <span>🔑 Changer mon mot de passe</span>
+          <button style="background:rgba(255,255,255,0.08);border:none;width:32px;height:32px;border-radius:10px;color:rgba(255,255,255,0.5);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="document.getElementById('pwd-overlay').remove()">✕</button>
+        </div>
+        <div id="pwd-err" style="background:rgba(217,48,37,0.12);border:1px solid rgba(217,48,37,0.25);color:#ff7b72;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none"></div>
+        <div class="field" style="margin-bottom:14px">
+          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:rgba(255,255,255,0.35);margin-bottom:8px">Mot de passe actuel</label>
+          <input id="pwd-current" type="password" autocomplete="current-password" placeholder="••••••••"
+            style="width:100%;padding:14px 16px;background:rgba(255,255,255,0.06);border:1.5px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit">
+        </div>
+        <div class="field" style="margin-bottom:14px">
+          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:rgba(255,255,255,0.35);margin-bottom:8px">Nouveau mot de passe</label>
+          <input id="pwd-new" type="password" autocomplete="new-password" placeholder="••••••••"
+            style="width:100%;padding:14px 16px;background:rgba(255,255,255,0.06);border:1.5px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit">
+        </div>
+        <div class="field" style="margin-bottom:20px">
+          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:rgba(255,255,255,0.35);margin-bottom:8px">Confirmer le nouveau mot de passe</label>
+          <input id="pwd-confirm" type="password" autocomplete="new-password" placeholder="••••••••"
+            style="width:100%;padding:14px 16px;background:rgba(255,255,255,0.06);border:1.5px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit">
+        </div>
+        <button id="pwd-btn" onclick="ClockApp.savePwd()"
+          style="width:100%;padding:17px;background:#FF622C;color:white;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit">
+          Enregistrer le nouveau mot de passe
+        </button>
+        <div style="font-size:11px;color:rgba(255,255,255,0.2);text-align:center;margin-top:12px">Minimum 6 caractères</div>
+      </div>`;
+    document.body.appendChild(overlay);
+    document.getElementById('pwd-current').focus();
+  },
+
+  async savePwd() {
+    const current = document.getElementById('pwd-current').value;
+    const next    = document.getElementById('pwd-new').value;
+    const confirm = document.getElementById('pwd-confirm').value;
+    const errEl   = document.getElementById('pwd-err');
+    const btn     = document.getElementById('pwd-btn');
+
+    const showErr = (msg) => { errEl.textContent=msg; errEl.style.display='block'; };
+
+    if(!current||!next||!confirm) { showErr('Tous les champs sont requis.'); return; }
+    if(next.length < 6)           { showErr('Le mot de passe doit contenir au moins 6 caractères.'); return; }
+    if(next !== confirm)          { showErr('Les deux nouveaux mots de passe ne correspondent pas.'); return; }
+
+    btn.textContent='Vérification…'; btn.disabled=true;
+    errEl.style.display='none';
+
+    try {
+      // Vérifier le mot de passe actuel
+      const currentHash = await sha256(current);
+      if(currentHash !== session.password_hash) {
+        showErr('Mot de passe actuel incorrect.');
+        btn.textContent='Enregistrer le nouveau mot de passe'; btn.disabled=false;
+        return;
+      }
+
+      // Sauvegarder le nouveau mot de passe
+      btn.textContent='Enregistrement…';
+      const newHash = await sha256(next);
+      const {error} = await SB.from('sh_users').update({password_hash:newHash}).eq('id',session.id);
+      if(error) throw error;
+
+      // Mettre à jour la session locale
+      session = {...session, password_hash:newHash};
+      localStorage.setItem('sh_clock_session', JSON.stringify(session));
+
+      document.getElementById('pwd-overlay').remove();
+      // Petit feedback visuel
+      const flash = document.createElement('div');
+      flash.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#008160;color:white;padding:12px 24px;border-radius:12px;font-size:14px;font-weight:700;z-index:999;animation:fadein 0.2s';
+      flash.textContent='✓ Mot de passe modifié avec succès';
+      document.body.appendChild(flash);
+      setTimeout(()=>flash.remove(), 3000);
+    } catch(e) {
+      showErr('Erreur : '+e.message);
+      btn.textContent='Enregistrer le nouveau mot de passe'; btn.disabled=false;
+    }
+  },
+
+  logout() {
+    if(timerInterval){clearInterval(timerInterval);timerInterval=null;}
+    session=null; employee=null; schedule=null; todayShift=null;
+    leaveBalance=null; leaveRequests=[]; myPointage=[]; allHolidays=[];
+    todayPointage=null; siteCoords=null;
+    currentTab='pointage';
+    setPause(null);
+    localStorage.removeItem('sh_clock_session');
+    this.showLogin();
+  }
+};
+
+// ================================================================
+// DÉMARRAGE
+// ================================================================
+document.addEventListener('DOMContentLoaded', () => {
+  try { ClockApp.init(); }
+  catch(e) {
+    document.body.innerHTML=`<div class="no-access">
+      <div class="icon">⚠️</div>
+      <p>Navigateur non compatible. Ouvrez dans Safari (iPhone) ou Chrome (Android).</p>
+      <p style="font-size:11px;color:rgba(255,255,255,0.2);margin-top:12px;word-break:break-all">${location.href}</p>
+    </div>`;
+  }
+});
+</script>
+</body>
+</html>
