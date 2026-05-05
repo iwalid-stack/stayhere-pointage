@@ -2710,7 +2710,24 @@ const App = {
             const imm = (row['N° IMM']||row['IMM']||row['N°IMM']||row['Num']||'').toString().trim();
             const poste = (row['POSITION']||row['POSTE']||row['Poste']||row['Position']||'').toString().trim();
             const affectation = (row['AFFECTATION']||row['Affectation']||'').toString().trim();
-            allRows.push({nom, prenom, imm, poste, affectation, siteId, sheetName});
+            const role = (row['ROLE']||row['Role']||row['role']||'collaborateur').toString().trim()||'collaborateur';
+            const accesHorloge = String(row['ACCES_HORLOGE']||row['acces_horloge']||'').toLowerCase() !== 'false';
+
+            // ── Détection du site : colonne SITE > onglet > défaut ──
+            const siteColRaw = (row['SITE']||row['Site']||row['site']||'').toString().trim();
+            let rowSiteId = siteId; // fallback : onglet ou défaut
+            if(siteColRaw) {
+              // Chercher par nom exact ou partiel dans DB.getSites()
+              const allSites = DB.getSites();
+              const match = allSites.find(s =>
+                s.nom?.toLowerCase() === siteColRaw.toLowerCase() ||
+                s.nom?.toLowerCase().includes(siteColRaw.toLowerCase()) ||
+                siteColRaw.toLowerCase().includes(s.nom?.toLowerCase())
+              );
+              if(match) rowSiteId = match.id;
+            }
+
+            allRows.push({nom, prenom, imm, poste, affectation, role, accesHorloge, siteId: rowSiteId, sheetName});
           });
         });
 
@@ -2737,7 +2754,8 @@ const App = {
           <td>${r.prenom} ${r.nom}</td>
           <td class="text-muted" style="font-size:11px">${r.imm||'—'}</td>
           <td class="text-muted" style="font-size:11px">${r.poste||'—'}</td>
-          <td class="text-muted" style="font-size:11px">${r.siteName}</td>
+          <td class="text-muted" style="font-size:11px">${r.siteName||'—'}</td>
+          <td class="text-muted" style="font-size:11px">${r.role||'collaborateur'}</td>
           <td><span class="cred-user">${r.username}</span></td>
           <td><span class="cred-pass">${r.password}</span></td>
         </tr>`).join('');
@@ -2745,7 +2763,7 @@ const App = {
         document.getElementById('import-preview').innerHTML=`
           <div class="alert alert-success">✓ <strong>${processed.length} collaborateurs</strong> détectés — identifiants et mots de passe générés automatiquement.</div>
           <div style="overflow-x:auto"><table class="import-table">
-            <thead><tr><th>Nom complet</th><th>N° IMM</th><th>Poste</th><th>Site</th><th>Identifiant</th><th>Mot de passe</th></tr></thead>
+            <thead><tr><th>Nom complet</th><th>N° IMM</th><th>Poste</th><th>Site</th><th>Rôle</th><th>Identifiant</th><th>Mot de passe</th></tr></thead>
             <tbody>${rows}</tbody>
           </table></div>`;
 
@@ -2794,7 +2812,10 @@ const App = {
         // Créer le compte utilisateur si pas déjà existant (sh_users legacy + sh_user_profiles via auto-migrate au 1er login)
         if(!DB.getUsers().find(u=>u.username===r.username)) {
           const hash=await sha256(r.password);
-          await DB.addUser({username:r.username,nom:r.prenom+' '+r.nom,password_hash:hash,role:'collaborateur',site_id:r.siteId,employee_id:empId,acces_horloge:true,acces_principal:true});
+          const role = r.role||'collaborateur';
+          const accesHorloge = r.accesHorloge !== false;
+          const accesPrincipal = !['collaborateur'].includes(role);
+          await DB.addUser({username:r.username,nom:r.prenom+' '+r.nom,password_hash:hash,role,site_id:r.siteId,employee_id:empId,acces_horloge:accesHorloge,acces_principal:accesPrincipal});
           // Note : le compte Supabase Auth sera créé automatiquement via auto-migrate-user au premier login
         }
       } catch(e) { errors++; console.error(e); }
