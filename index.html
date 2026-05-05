@@ -430,6 +430,7 @@ async function sha256(str) {
 }
 function uid() { return Date.now().toString(36)+Math.random().toString(36).substr(2,5); }
 function nowISO() { return new Date().toISOString(); }
+function todayStr() { return new Date().toISOString().substring(0,10); }
 function daysInMonth(y,m) { return new Date(y,m+1,0).getDate(); }
 function dayOfWeek(y,m,d) { return new Date(y,m,d).getDay(); }
 function fmtDate(y,m,d) { return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
