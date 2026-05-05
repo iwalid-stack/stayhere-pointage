@@ -456,13 +456,16 @@ const DB = {
   getUserByHash(username, hash) { return Cache.users.find(u=>u.username.toLowerCase()===username.toLowerCase()&&u.password_hash===hash)||null; },
   getUsers() { return Cache.users; },
   async addUser(u) {
-    u.id = uid(); Cache.users.push(u);
+    u.id = uid();
+    const plainPassword = u.password; // mot de passe en clair pour la Edge Function
+    delete u.password;                // ne pas stocker en clair dans le cache
+    Cache.users.push(u);
     // Utiliser l'Edge Function create-user pour créer Auth + profil directement
     const {data:{session:s}} = await SB.auth.getSession();
     const res = await fetch(`${SB_URL}/functions/v1/create-user`, {
       method: 'POST',
       headers: {'Content-Type':'application/json','Authorization':`Bearer ${s?.access_token}`,'apikey':SB_KEY},
-      body: JSON.stringify(u),
+      body: JSON.stringify({...u, password: plainPassword}),
     });
     const json = await res.json();
     if (!res.ok || !json.ok) throw new Error(json.error || `Erreur création utilisateur (${res.status})`);
@@ -3056,8 +3059,7 @@ const App = {
           const role = r.role||'collaborateur';
           const accesHorloge = r.accesHorloge !== false;
           const accesPrincipal = !['collaborateur'].includes(role);
-          await DB.addUser({username:r.username,nom:r.prenom+' '+r.nom,password_hash:hash,role,site_id:r.siteId,employee_id:empId,acces_horloge:accesHorloge,acces_principal:accesPrincipal});
-          // Note : le compte Supabase Auth sera créé automatiquement via auto-migrate-user au premier login
+          await DB.addUser({username:r.username,nom:r.prenom+' '+r.nom,password:r.password,password_hash:hash,role,site_id:r.siteId,employee_id:empId,acces_horloge:accesHorloge,acces_principal:accesPrincipal});
         }
       } catch(e) { errors++; console.error(e); }
     }
@@ -3399,7 +3401,7 @@ const App = {
       const password=document.getElementById('u-pw')?.value||'';
       if(!password){alert('Mot de passe requis.');setSyncStatus('ok','● En ligne');return;}
       const password_hash=await sha256(password);
-      await DB.addUser({username,nom,password_hash,role,site_id,employee_id:employee_id||null,acces_principal,acces_horloge});
+      await DB.addUser({username,nom,password,password_hash,role,site_id,employee_id:employee_id||null,acces_principal,acces_horloge});
     }
     setSyncStatus('ok','● En ligne'); this.closeModal(); this.renderUtilisateurs();
   },
