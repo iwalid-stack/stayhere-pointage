@@ -562,13 +562,17 @@ const DB = {
   async updateUser(id, upd) {
     const i=Cache.users.findIndex(u=>u.id===id); if(i>=0)Cache.users[i]={...Cache.users[i],...upd};
     // Mettre à jour sh_users ET sh_user_profiles (les deux peuvent être source de données)
-    await SB.from('sh_users').update(upd).eq('id',id);
+    const {error:e1} = await SB.from('sh_users').update(upd).eq('id',id);
+    if(e1) console.warn('updateUser sh_users error:', e1.message);
     // sh_user_profiles utilise l'username pour retrouver l'entrée (son id est l'UUID Auth)
     const u=Cache.users.find(x=>x.id===id);
     if(u?.username) {
       const profileUpd={nom:upd.nom,role:upd.role,site_id:upd.site_id,employee_id:upd.employee_id,acces_horloge:upd.acces_horloge,acces_principal:upd.acces_principal};
       Object.keys(profileUpd).forEach(k=>profileUpd[k]===undefined&&delete profileUpd[k]);
-      await SB.from('sh_user_profiles').update(profileUpd).eq('username',u.username);
+      const {error:e2,data:d2} = await SB.from('sh_user_profiles').update(profileUpd).eq('username',u.username).select();
+      if(e2) console.warn('updateUser sh_user_profiles error:', e2.message);
+      else if(!d2?.length) console.warn('updateUser sh_user_profiles: aucune ligne mise à jour pour username=', u.username);
+      else console.log('updateUser sh_user_profiles OK:', d2);
     }
   },
 
