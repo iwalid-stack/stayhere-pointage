@@ -424,20 +424,40 @@ const ClockApp = {
     if(btn) { btn.textContent='Connexion...'; btn.disabled=true; }
 
     try {
-      // ── Supabase Auth ──────────────────────────────────────
+      let profile = null;
+
+      // ── Tentative 1 : Supabase Auth (utilisateur déjà migré) ──
       const email = username + '@stayhere.internal';
       const { data, error } = await SB.auth.signInWithPassword({ email, password });
 
-      if (error || !data?.user) {
-        if(errEl){errEl.textContent='Identifiant ou mot de passe incorrect.';errEl.style.display='block';}
-        if(btn){btn.textContent='Se connecter';btn.disabled=false;}
-        return;
+      if (!error && data?.user) {
+        const { data: p } = await SB.from('sh_user_profiles').select('*').eq('id', data.user.id).single();
+        profile = p;
+      } else {
+        // ── Tentative 2 : Migration automatique (premier login) ──
+        if(btn) btn.textContent = 'Migration…';
+        const res = await fetch(`${SB_URL}/functions/v1/auto-migrate-user`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': SB_KEY },
+          body: JSON.stringify({ username, password }),
+        });
+        const json = await res.json();
+
+        if (!res.ok || !json.ok) {
+          if(errEl){errEl.textContent='Identifiant ou mot de passe incorrect.';errEl.style.display='block';}
+          if(btn){btn.textContent='Se connecter';btn.disabled=false;}
+          return;
+        }
+
+        // Restaurer la session Supabase retournée
+        await SB.auth.setSession({
+          access_token: json.session.access_token,
+          refresh_token: json.session.refresh_token,
+        });
+        profile = json.profile;
       }
 
-      // Récupérer le profil applicatif
-      const { data: profile, error: profErr } = await SB.from('sh_user_profiles').select('*').eq('id', data.user.id).single();
-
-      if (profErr || !profile) {
+      if (!profile) {
         if(errEl){errEl.textContent='Profil introuvable. Contactez votre administrateur.';errEl.style.display='block';}
         await SB.auth.signOut();
         if(btn){btn.textContent='Se connecter';btn.disabled=false;}
@@ -450,7 +470,7 @@ const ClockApp = {
         return;
       }
 
-      session = { ...profile, _sbSession: data.session };
+      session = { ...profile };
       await this.loadData(false);
     } catch(e) {
       if(errEl){errEl.textContent='Erreur de connexion : '+e.message;errEl.style.display='block';}

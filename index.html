@@ -1238,20 +1238,43 @@ const App = {
       if(btn) { btn.textContent = 'Connexion...'; btn.disabled = true; }
 
       try {
-        // ── Supabase Auth (email convention : username@stayhere.internal) ──
+        let profile = null;
+
+        // ── Tentative 1 : Supabase Auth (utilisateur déjà migré) ──
         const email = username + '@stayhere.internal';
         const { data, error } = await SB.auth.signInWithPassword({ email, password });
 
-        if (error || !data?.user) {
-          errEl.textContent = 'Identifiant ou mot de passe incorrect.';
-          errEl.classList.remove('hidden');
-          if(btn) { btn.textContent = 'Se connecter'; btn.disabled = false; }
-          return;
+        if (!error && data?.user) {
+          // Utilisateur déjà migré → récupérer son profil
+          const { data: p } = await SB.from('sh_user_profiles').select('*').eq('id', data.user.id).single();
+          profile = p;
+        } else {
+          // ── Tentative 2 : Migration automatique (premier login) ──
+          if(btn) btn.textContent = 'Migration du compte…';
+          const res = await fetch(`${SB_URL}/functions/v1/auto-migrate-user`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': SB_KEY },
+            body: JSON.stringify({ username, password }),
+          });
+          const json = await res.json();
+
+          if (!res.ok || !json.ok) {
+            // Mauvais identifiants (ni dans Auth ni dans sh_users)
+            errEl.textContent = 'Identifiant ou mot de passe incorrect.';
+            errEl.classList.remove('hidden');
+            if(btn) { btn.textContent = 'Se connecter'; btn.disabled = false; }
+            return;
+          }
+
+          // Migration réussie → restaurer la session Supabase retournée par l'Edge Function
+          await SB.auth.setSession({
+            access_token: json.session.access_token,
+            refresh_token: json.session.refresh_token,
+          });
+          profile = json.profile;
         }
 
-        // Récupérer le profil applicatif
-        const { data: profile, error: profErr } = await SB.from('sh_user_profiles').select('*').eq('id', data.user.id).single();
-        if (profErr || !profile) {
+        if (!profile) {
           errEl.textContent = 'Profil utilisateur introuvable. Contactez l\'administrateur.';
           errEl.classList.remove('hidden');
           await SB.auth.signOut();
