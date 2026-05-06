@@ -1625,10 +1625,7 @@ const App = {
     const entries=DB.getPointage(this.currentSite,this.currentYear,this.currentMonth+1);
 
     const extra=document.getElementById('topbar-extra');
-    if(extra&&this.canGlobal()) extra.innerHTML=`
-      <button class="btn btn-secondary btn-sm" onclick="App.exportCSV()">⬇ CSV site</button>
-      <button class="btn btn-primary btn-sm" onclick="App.exportGlobal()" title="Exporter tous les sites en un seul fichier">⬇ Export global</button>
-    `;
+    if(extra&&this.canGlobal()) extra.innerHTML=`<button class="btn btn-secondary btn-sm" onclick="App.exportCSV()">⬇ CSV site</button>`;
 
     const siteSelector=isKA?`<strong style="color:var(--text-muted)">${site?.nom||''}</strong>`:`<select onchange="App.changeSite(this.value)" style="max-width:220px">${sites.map(s=>`<option value="${s.id}" ${s.id===this.currentSite?'selected':''}>${s.nom}</option>`).join('')}</select>`;
     const legend=TYPES.map(t=>`<div class="legend-item"><div class="legend-dot" style="background:var(--${t.key}-bg);border:1px solid var(--${t.key})"></div><span>${t.label} (${t.short})</span></div>`).join('');
@@ -2534,8 +2531,9 @@ const App = {
         <button class="btn btn-sm ${view==='site'?'btn-primary':'btn-ghost'}" onclick="App._synthView='site';App._synthSearch='';App.renderSynthese()">🏠 Par site</button>
         <button class="btn btn-sm ${view==='collab'?'btn-primary':'btn-ghost'}" onclick="App._synthView='collab';App.renderSynthese()">👤 Par collaborateur</button>
       </div>
+      ${this.canGlobal()?`<button class="btn btn-primary btn-sm" onclick="App.exportGlobal()" title="Exporter tous les collaborateurs de tous les sites en un seul fichier CSV">⬇ Export global</button>`:''}
       ${view==='site'
-        ?`<button class="btn btn-secondary btn-sm" onclick="App.exportAllCSV()">⬇ Tout exporter</button>`
+        ?`<button class="btn btn-secondary btn-sm" onclick="App.exportAllCSV()">⬇ Par site (ZIP)</button>`
         :`<div style="position:relative;display:flex;align-items:center">
             <span style="position:absolute;left:10px;color:var(--text-muted);font-size:13px">🔍</span>
             <input id="synth-search" type="search" placeholder="Rechercher un collaborateur…"
