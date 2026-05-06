@@ -2111,13 +2111,11 @@ const App = {
 
     const rows=employees.map(emp=>{
       const schedule=DB.getSchedule(emp.id);
-      const CYCLE_TYPES=['travaille','double','off'];
       const cells=days.map((date,i)=>{
         const entry=DB.getPointageByEmpDate(emp.id,date);
         const isFerie=DB.isHoliday(date);
         const isLocked=!!lock;
         let bg='',label='';
-        const isCyclable=!isLocked&&!isFerie&&(!entry||CYCLE_TYPES.includes(entry.type));
 
         if(isFerie){
           bg='background:var(--ferie-bg)';
@@ -2141,11 +2139,9 @@ const App = {
           label=`<span style="color:#ccc;font-size:16px">·</span>`;
         }
 
-        const title=isCyclable
-          ?`Clic : Vide → Présent → Double (08h–00h) → OFF → Vide`
-          :(entry&&!CYCLE_TYPES.includes(entry.type)?'Modifiable depuis Saisie du pointage':'');
-        const onclick=isCyclable?`onclick="App.cyclePlanningCell('${emp.id}','${date}')"`:' ';
-        return`<td ${onclick} title="${title}" style="text-align:center;padding:6px 4px;${bg};cursor:${isCyclable?'pointer':'default'}">${label}</td>`;
+        const onclick=!isLocked&&!isFerie?`onclick="App.openPlanningCellMenu('${emp.id}','${date}',event)"`:' ';
+        const cursor=!isLocked&&!isFerie?'pointer':'default';
+        return`<td ${onclick} title="${!isLocked&&!isFerie?'Cliquer pour choisir le type':''}" style="text-align:center;padding:6px 4px;${bg};cursor:${cursor}">${label}</td>`;
       }).join('');
 
       // Sélecteur jour de repos
@@ -2203,33 +2199,50 @@ const App = {
   nextWeek(){const d=new Date(this._planningWeek+'T12:00:00');d.setDate(d.getDate()+7);this._planningWeek=d.toISOString().substring(0,10);this.renderPlanning();},
   goCurrentWeek(){this._planningWeek=this._getMonday(new Date());this.renderPlanning();},
 
-  async cyclePlanningCell(empId, date) {
+  openPlanningCellMenu(empId, date, event) {
     const emp=DB.getEmployees().find(e=>e.id===empId);
     if(!emp) return;
     if(DB.getLock(emp.site_id, date.substring(0,7))) return;
+    // Fermer tout menu existant
+    document.getElementById('planning-cell-menu')?.remove();
     const entry=DB.getPointageByEmpDate(empId,date);
-    const cur=entry?.type;
+    const menuItems=[
+      {key:'travaille', label:'✅ Présent', color:'var(--travaille)'},
+      {key:'double',    label:'⏰ Double shift', color:'var(--double)'},
+      {key:'off',       label:'🔴 OFF / Repos', color:'var(--off)'},
+      {key:'conge',     label:'🏖 Congé', color:'var(--conge)'},
+      {key:'recup',     label:'🔄 Récupération', color:'var(--recup)'},
+      {key:'maladie',   label:'🏥 Maladie', color:'var(--maladie)'},
+      {key:'',          label:'✕ Effacer', color:'#999'},
+    ];
+    const rect=event.target.closest('td').getBoundingClientRect();
+    const menu=document.createElement('div');
+    menu.id='planning-cell-menu';
+    menu.style.cssText=`position:fixed;z-index:9999;background:white;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:4px;min-width:160px;top:${Math.min(rect.bottom+4, window.innerHeight-220)}px;left:${Math.min(rect.left, window.innerWidth-170)}px`;
+    menu.innerHTML=menuItems.map(m=>`<div onclick="App._setPlanningCell('${empId}','${date}','${m.key}')" style="padding:7px 12px;cursor:pointer;border-radius:6px;font-size:13px;color:${m.color};font-weight:600;display:flex;align-items:center;gap:6px" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">${m.label}${entry?.type===m.key?' ✓':''}</div>`).join('');
+    document.body.appendChild(menu);
+    setTimeout(()=>document.addEventListener('click',function close(e){if(!menu.contains(e.target)){menu.remove();document.removeEventListener('click',close);}},{once:false}),0);
+  },
+
+  async _setPlanningCell(empId, date, type) {
+    document.getElementById('planning-cell-menu')?.remove();
+    const emp=DB.getEmployees().find(e=>e.id===empId);
+    if(!emp) return;
     setSyncStatus('busy','↻...');
     try {
-      if(!cur) {
-        // vide → présent
-        await DB.setPointage(empId,date,'travaille','Planning manuel',currentSession);
-      } else if(cur==='travaille') {
-        // présent → double shift
+      if(!type) {
+        await DB.deletePointage(empId,date,currentSession);
+      } else if(type==='double') {
         await DB.setPointage(empId,date,'double','Double shift (planning)',currentSession);
         await this._upsertDoubleShift(empId,date,emp);
-      } else if(cur==='double') {
-        // double → off
-        await DB.setPointage(empId,date,'off','Jour de repos (planning)',currentSession);
-      } else if(cur==='off') {
-        // off → vide
-        await DB.deletePointage(empId,date,currentSession);
+      } else {
+        const notes={travaille:'Planning manuel',off:'Jour de repos (planning)',conge:'Congé (planning)',recup:'Récupération (planning)',maladie:'Maladie (planning)'}[type]||'Planning';
+        await DB.setPointage(empId,date,type,notes,currentSession);
       }
-      // Autres types (maladie, congé…) → non modifiable depuis le planning
       setSyncStatus('ok','● En ligne');
     } catch(e) {
       setSyncStatus('error','⚠ Erreur');
-      console.error('cyclePlanningCell:', e);
+      console.error('_setPlanningCell:', e);
     }
     this.renderPlanning();
   },
