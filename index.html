@@ -1154,7 +1154,15 @@ const DB = {
   // SYNTHESE
   getSynthese(siteId, year, month) {
     const entries=this.getPointage(siteId,year,month);
-    const emps=this.getEmployees(siteId).filter(e=>e.actif);
+    // Employés permanents du site
+    const permanentEmps=this.getEmployees(siteId).filter(e=>e.actif);
+    // Ajouter les détachés temporaires : employés dont des entrées existent pour ce site
+    // (leurs pointages ont été enregistrés avec site_id = site de détachement)
+    const empIdsWithEntries=new Set(entries.map(p=>p.employee_id));
+    const detachedEmps=this.getEmployees().filter(e=>
+      e.actif && !permanentEmps.find(p=>p.id===e.id) && empIdsWithEntries.has(e.id)
+    );
+    const emps=[...permanentEmps, ...detachedEmps];
     const result={};
     emps.forEach(emp=>{
       result[emp.id]={emp,totals:{}};
