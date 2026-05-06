@@ -2748,19 +2748,28 @@ const App = {
 
   // ---- COLLABORATEURS ----
   _collabSearch: '',
+  _collabFilterPoste: '',
+  _collabFilterSociete: '',
   renderCollaborateurs(search){
     if(search!==undefined) this._collabSearch=search;
     const q=(this._collabSearch||'').toLowerCase().trim();
+    const fPoste=this._collabFilterPoste||'';
+    const fSociete=this._collabFilterSociete||'';
     const extra=document.getElementById('topbar-extra');
     if(extra) extra.innerHTML=`
       ${this.canGlobal()?`<button class="btn btn-danger btn-sm" onclick="App.openPurgeUsers()" style="background:rgba(217,48,37,0.12);color:var(--danger);border:1px solid rgba(217,48,37,0.3)">🗑 Vider la liste</button>`:''}
       <button class="btn btn-secondary btn-sm" onclick="App.importExcel()">📥 Importer Excel</button>
       <button class="btn btn-primary btn-sm" onclick="App.openAddEmployee()">+ Nouveau</button>`;
     const all=DB.getEmployees().filter(e=>e.actif);
-    const filtered=q?all.filter(e=>{
+    const postes=[...new Set(all.map(e=>e.poste).filter(Boolean))].sort();
+    const societes=['StayHere','Syndic Foncier','BeInterim'];
+    const filtered=all.filter(e=>{
       const site=DB.getSiteById(e.site_id);
-      return `${e.prenom} ${e.nom} ${e.nom} ${e.prenom} ${e.imm||''} ${e.poste} ${e.affectation||''} ${site?.nom||''}`.toLowerCase().includes(q);
-    }):all;
+      const matchQ=!q||`${e.prenom} ${e.nom} ${e.nom} ${e.prenom} ${e.imm||''} ${e.poste} ${e.affectation||''} ${site?.nom||''}`.toLowerCase().includes(q);
+      const matchPoste=!fPoste||e.poste===fPoste;
+      const matchSociete=!fSociete||e.societe===fSociete;
+      return matchQ&&matchPoste&&matchSociete;
+    });
     const rows=filtered.map(emp=>{
       const site=DB.getSiteById(emp.site_id);
       const sched=DB.getSchedule(emp.id);
@@ -2780,17 +2789,27 @@ const App = {
       const societeBadge=emp.societe?`<span style="font-size:10px;background:#e8f0fe;color:#1a73e8;border:1px solid #c5d8fb;border-radius:4px;padding:1px 6px;white-space:nowrap">${emp.societe}</span>`:'';
       return`<tr><td class="text-muted text-sm">${emp.imm||'—'}</td><td><strong>${emp.prenom} ${emp.nom}</strong>${societeBadge?'<br>'+societeBadge:''}</td><td>${emp.poste}</td><td>${siteCell}</td><td class="text-muted text-sm">${emp.affectation||'—'}</td><td>${schedStr}</td><td>${balBadge}</td><td style="white-space:nowrap"><button class="btn btn-ghost btn-xs" onclick="App.openEditEmployee('${emp.id}')">Modifier</button> ${tempBtn} ${this.canManage()?`<button class="btn btn-ghost btn-xs" onclick="App.congesEditBalance('${emp.id}')" title="Saisir soldes CP/RECUP">💰 Soldes</button> `:''}${this.canManage()?`<button class="btn btn-danger btn-xs" onclick="App.deleteEmployee('${emp.id}')">Désactiver</button>`:''}</td></tr>`;
     }).join('');
-    const countLabel=q?`<span class="text-muted text-sm">${filtered.length} / ${all.length} résultat${filtered.length>1?'s':''}</span>`:`<span class="text-muted text-sm">${all.length} collaborateur${all.length>1?'s':''}</span>`;
+    const hasFilter=q||fPoste||fSociete;
+    const countLabel=`<span class="text-muted text-sm">${filtered.length}${hasFilter?' / '+all.length:''} collaborateur${filtered.length>1?'s':''}</span>`;
+    const resetBtn=hasFilter?`<button class="btn btn-ghost btn-sm" onclick="App._collabSearch='';App._collabFilterPoste='';App._collabFilterSociete='';App.renderCollaborateurs()">✕ Réinitialiser</button>`:'';
     document.getElementById('page-content').innerHTML=`
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
-        <div style="position:relative;flex:1;min-width:200px;max-width:380px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+        <div style="position:relative;flex:1;min-width:180px;max-width:320px">
           <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:14px">🔍</span>
-          <input id="collab-search" type="search" placeholder="Rechercher par nom, poste, site, IMM…"
+          <input id="collab-search" type="search" placeholder="Nom, IMM, site…"
             value="${this._collabSearch}"
             oninput="App.renderCollaborateurs(this.value)"
             style="width:100%;padding:9px 12px 9px 34px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface)">
         </div>
-        ${countLabel}
+        <select onchange="App._collabFilterPoste=this.value;App.renderCollaborateurs()" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text)">
+          <option value="">— Tous les postes —</option>
+          ${postes.map(p=>`<option value="${p}" ${p===fPoste?'selected':''}>${p}</option>`).join('')}
+        </select>
+        <select onchange="App._collabFilterSociete=this.value;App.renderCollaborateurs()" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text)">
+          <option value="">— Toutes les sociétés —</option>
+          ${societes.map(s=>`<option value="${s}" ${s===fSociete?'selected':''}>${s}</option>`).join('')}
+        </select>
+        ${countLabel}${resetBtn}
       </div>
       <div class="card" style="padding:0;overflow:hidden">
         <div class="table-wrapper"><table class="data-table">
