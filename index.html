@@ -1194,15 +1194,31 @@ const DB = {
   },
 
   exportCSVGlobal(year, month) {
-    // Export de TOUS les sites en un seul fichier
+    // Export de TOUS les sites en un seul fichier (détail jour par jour)
     const allSites=this.getSites().filter(s=>s.actif);
     const allEmps=this.getEmployees();
-    const allEntries=this.getPointage(null,year,month); // null = tous les sites
+    const allEntries=this.getPointage(null,year,month);
     let csv='N° IMM;Société;Site;Affectation;Collaborateur;Poste;Date;Code;Notes;Saisi par;Validé\n';
     allEntries.forEach(p=>{
       const emp=allEmps.find(e=>e.id===p.employee_id); if(!emp)return;
       const site=allSites.find(s=>s.id===p.site_id);
       csv+=`"${emp.imm||''}";"${emp.societe||''}";"${site?.nom||p.site_id||''}";"${emp.affectation||''}";"${emp.nom} ${emp.prenom}";"${emp.poste}";"${p.date}";"${TYPE_CODES[p.type]||p.type}";"${p.notes||''}";"${p.created_by||''}";"${p.validated?'Oui':'Non'}"\n`;
+    });
+    return csv;
+  },
+
+  exportSyntheseBySociete(year, month, societe) {
+    // Export synthèse (totaux par collaborateur) filtrée par société
+    const allData=this.getSyntheseByCollab(year, month, null);
+    const filtered=societe?allData.filter(({emp})=>emp.societe===societe):allData;
+    const typeKeys=TYPES.map(t=>t.key);
+    const typeHeaders=TYPES.map(t=>t.short).join(';');
+    let csv=`N° IMM;Société;Site(s);Affectation;Collaborateur;Poste;${typeHeaders};TOTAL\n`;
+    filtered.forEach(({emp,totals,sites})=>{
+      const siteNames=sites.map(sid=>this.getSiteById(sid)?.nom||sid).join(' / ');
+      const typeCols=typeKeys.map(k=>totals[k]||0).join(';');
+      const total=typeKeys.reduce((s,k)=>s+(totals[k]||0),0);
+      csv+=`"${emp.imm||''}";"${emp.societe||''}";"${siteNames}";"${emp.affectation||''}";"${emp.nom} ${emp.prenom}";"${emp.poste}";${typeCols};${total}\n`;
     });
     return csv;
   },
@@ -1719,6 +1735,15 @@ const App = {
     const a=document.createElement('a');
     a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));
     a.download=`pointage_GLOBAL_${ym}.csv`;
+    a.click();
+  },
+  exportSyntheseParSociete(societe){
+    const ym=`${this.currentYear}-${String(this.currentMonth+1).padStart(2,'0')}`;
+    const csv=DB.exportSyntheseBySociete(this.currentYear,this.currentMonth+1,societe);
+    const slug=societe.replace(/\s+/g,'_');
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));
+    a.download=`synthese_${slug}_${ym}.csv`;
     a.click();
   },
 
@@ -2531,7 +2556,13 @@ const App = {
         <button class="btn btn-sm ${view==='site'?'btn-primary':'btn-ghost'}" onclick="App._synthView='site';App._synthSearch='';App.renderSynthese()">🏠 Par site</button>
         <button class="btn btn-sm ${view==='collab'?'btn-primary':'btn-ghost'}" onclick="App._synthView='collab';App.renderSynthese()">👤 Par collaborateur</button>
       </div>
-      ${this.canGlobal()?`<button class="btn btn-primary btn-sm" onclick="App.exportGlobal()" title="Exporter tous les collaborateurs de tous les sites en un seul fichier CSV">⬇ Export global</button>`:''}
+      ${this.canGlobal()?`
+        <button class="btn btn-primary btn-sm" onclick="App.exportGlobal()" title="Exporter tous les collaborateurs (détail jour par jour)">⬇ Export global</button>
+        <button class="btn btn-secondary btn-sm" onclick="App.exportSyntheseParSociete('StayHere')" title="Synthèse StayHere">⬇ StayHere</button>
+        <button class="btn btn-secondary btn-sm" onclick="App.exportSyntheseParSociete('Syndic Foncier')" title="Synthèse Syndic Foncier">⬇ Syndic Foncier</button>
+        <button class="btn btn-secondary btn-sm" onclick="App.exportSyntheseParSociete('BeInterim')" title="Synthèse BeInterim">⬇ BeInterim</button>
+      `:''}
+
       ${view==='site'
         ?`<button class="btn btn-secondary btn-sm" onclick="App.exportAllCSV()">⬇ Par site (ZIP)</button>`
         :`<div style="position:relative;display:flex;align-items:center">
