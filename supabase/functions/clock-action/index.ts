@@ -144,7 +144,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: employee } = await sbAdmin
       .from('sh_employees')
-      .select('site_id, pointage_horaire, has_rotation')
+      .select('site_id, pointage_horaire, has_rotation, require_gps')
       .eq('id', empId)
       .single();
 
@@ -221,7 +221,8 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── 6. Vérification géofence SERVEUR ─────────────────────
-    if (effectiveSiteId) {
+    // Ignorée si l'employé est en télétravail (require_gps === false)
+    if (effectiveSiteId && employee.require_gps !== false) {
       const { data: site } = await sbAdmin
         .from('sh_sites')
         .select('latitude, longitude, geofence_radius')

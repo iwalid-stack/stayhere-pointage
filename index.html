@@ -2756,6 +2756,12 @@ const App = {
           <span>Activer le pointage horaire (arrivée / départ)</span>
         </label>
       </div>
+      <div style="margin-bottom:12px">
+        <label class="perm-item ${emp?.require_gps!==false?'checked':''}" style="display:inline-flex;cursor:pointer">
+          <input type="checkbox" id="emp-gps" ${emp?.require_gps!==false?'checked':''} onchange="this.closest('.perm-item').classList.toggle('checked',this.checked)">
+          <span>📍 Validation GPS obligatoire (désactiver pour le télétravail)</span>
+        </label>
+      </div>
       <div id="emp-horaire-fields" style="${emp?.pointage_horaire===false?'display:none':''}">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div class="form-group"><label>Heure début prévue</label><input id="emp-hdebut" type="time" value="${sched?.heure_debut||'09:00'}"></div>
@@ -2775,13 +2781,14 @@ const App = {
     const site_id=document.getElementById('emp-site').value;
     const affectation=document.getElementById('emp-affectation').value;
     const pointage_horaire=document.getElementById('emp-horaire')?.checked!==false;
+    const require_gps=document.getElementById('emp-gps')?.checked!==false;
     const heureDebut=document.getElementById('emp-hdebut')?.value;
     const heureFin=document.getElementById('emp-hfin')?.value;
     if(!prenom||!nom){alert('Prénom et nom requis.');return;}
     setSyncStatus('busy','↻...');
     let empId=id;
-    if(id) await DB.updateEmployee(id,{imm,prenom,nom,poste,site_id,affectation,pointage_horaire});
-    else { const e={imm,prenom,nom,poste,site_id,affectation,pointage_horaire}; await DB.addEmployee(e); empId=e.id; }
+    if(id) await DB.updateEmployee(id,{imm,prenom,nom,poste,site_id,affectation,pointage_horaire,require_gps});
+    else { const e={imm,prenom,nom,poste,site_id,affectation,pointage_horaire,require_gps}; await DB.addEmployee(e); empId=e.id; }
     if(pointage_horaire&&heureDebut&&heureFin) await DB.setSchedule(empId,heureDebut,heureFin);
     setSyncStatus('ok','● En ligne'); this.closeModal(); this.renderCollaborateurs();
   },
