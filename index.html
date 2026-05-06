@@ -1185,10 +1185,24 @@ const DB = {
     const entries=this.getPointage(siteId,year,month);
     const emps=this.getEmployees(siteId);
     const site=this.getSiteById(siteId);
-    let csv='N° IMM;Site;Affectation;Collaborateur;Poste;Date;Code;Notes;Saisi par;Validé\n';
+    let csv='N° IMM;Société;Site;Affectation;Collaborateur;Poste;Date;Code;Notes;Saisi par;Validé\n';
     entries.forEach(p=>{
       const emp=emps.find(e=>e.id===p.employee_id); if(!emp)return;
-      csv+=`"${emp.imm||''}";"${site?.nom||siteId}";"${emp.affectation||''}";"${emp.nom} ${emp.prenom}";"${emp.poste}";"${p.date}";"${TYPE_CODES[p.type]||p.type}";"${p.notes}";"${p.created_by}";"${p.validated?'Oui':'Non'}"\n`;
+      csv+=`"${emp.imm||''}";"${emp.societe||''}";"${site?.nom||siteId}";"${emp.affectation||''}";"${emp.nom} ${emp.prenom}";"${emp.poste}";"${p.date}";"${TYPE_CODES[p.type]||p.type}";"${p.notes}";"${p.created_by}";"${p.validated?'Oui':'Non'}"\n`;
+    });
+    return csv;
+  },
+
+  exportCSVGlobal(year, month) {
+    // Export de TOUS les sites en un seul fichier
+    const allSites=this.getSites().filter(s=>s.actif);
+    const allEmps=this.getEmployees();
+    const allEntries=this.getPointage(null,year,month); // null = tous les sites
+    let csv='N° IMM;Société;Site;Affectation;Collaborateur;Poste;Date;Code;Notes;Saisi par;Validé\n';
+    allEntries.forEach(p=>{
+      const emp=allEmps.find(e=>e.id===p.employee_id); if(!emp)return;
+      const site=allSites.find(s=>s.id===p.site_id);
+      csv+=`"${emp.imm||''}";"${emp.societe||''}";"${site?.nom||p.site_id||''}";"${emp.affectation||''}";"${emp.nom} ${emp.prenom}";"${emp.poste}";"${p.date}";"${TYPE_CODES[p.type]||p.type}";"${p.notes||''}";"${p.created_by||''}";"${p.validated?'Oui':'Non'}"\n`;
     });
     return csv;
   },
@@ -1611,7 +1625,10 @@ const App = {
     const entries=DB.getPointage(this.currentSite,this.currentYear,this.currentMonth+1);
 
     const extra=document.getElementById('topbar-extra');
-    if(extra&&this.canGlobal()) extra.innerHTML=`<button class="btn btn-secondary btn-sm" onclick="App.exportCSV()">⬇ CSV</button>`;
+    if(extra&&this.canGlobal()) extra.innerHTML=`
+      <button class="btn btn-secondary btn-sm" onclick="App.exportCSV()">⬇ CSV site</button>
+      <button class="btn btn-primary btn-sm" onclick="App.exportGlobal()" title="Exporter tous les sites en un seul fichier">⬇ Export global</button>
+    `;
 
     const siteSelector=isKA?`<strong style="color:var(--text-muted)">${site?.nom||''}</strong>`:`<select onchange="App.changeSite(this.value)" style="max-width:220px">${sites.map(s=>`<option value="${s.id}" ${s.id===this.currentSite?'selected':''}>${s.nom}</option>`).join('')}</select>`;
     const legend=TYPES.map(t=>`<div class="legend-item"><div class="legend-dot" style="background:var(--${t.key}-bg);border:1px solid var(--${t.key})"></div><span>${t.label} (${t.short})</span></div>`).join('');
@@ -1699,6 +1716,14 @@ const App = {
   nextMonth(){if(this.currentMonth===11){this.currentMonth=0;this.currentYear++;}else this.currentMonth++;this.renderPointage();},
   changeSite(id){this.currentSite=id;this.renderPointage();},
   exportCSV(){const csv=DB.exportCSV(this.currentSite,this.currentYear,this.currentMonth+1);const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));a.download=`pointage_${this.currentSite}_${this.currentYear}-${String(this.currentMonth+1).padStart(2,'0')}.csv`;a.click();},
+  exportGlobal(){
+    const ym=`${this.currentYear}-${String(this.currentMonth+1).padStart(2,'0')}`;
+    const csv=DB.exportCSVGlobal(this.currentYear,this.currentMonth+1);
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));
+    a.download=`pointage_GLOBAL_${ym}.csv`;
+    a.click();
+  },
 
   // ---- POINTAGE HORAIRE ----
   _shiftDate: new Date().toISOString().substring(0,10),
