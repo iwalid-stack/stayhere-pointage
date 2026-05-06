@@ -117,7 +117,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .pointage-table{border-collapse:collapse;min-width:100%;font-size:12px}
 .pointage-table th{background:var(--primary);color:white;padding:8px 6px;text-align:center;font-weight:600;font-size:11px;white-space:nowrap;border:1px solid rgba(255,255,255,0.1);position:sticky;top:0;z-index:10}
 .pointage-table th.col-emp{text-align:left;padding-left:12px;min-width:180px;position:sticky;left:0;z-index:20}
-.pointage-table th.day-weekend{background:#2d3748} .pointage-table th.day-ferie{background:#7c4a00}
+.pointage-table th.day-weekend{background:#2d3748} .pointage-table th.day-ferie{background:#7c4a00} .pointage-table th.prev-period{background:#1a2030;opacity:0.75}
 .pointage-table td{border:1px solid var(--border);padding:0;text-align:center;min-width:34px}
 .pointage-table td.col-emp{text-align:left;padding:8px 12px;background:var(--surface);position:sticky;left:0;z-index:5;border-right:2px solid var(--border)}
 .emp-name{font-weight:600;color:var(--text)} .emp-poste{font-size:10px;color:var(--text-muted)}
@@ -754,6 +754,27 @@ function daysInMonth(y,m) { return new Date(y,m+1,0).getDate(); }
 function dayOfWeek(y,m,d) { return new Date(y,m,d).getDay(); }
 function fmtDate(y,m,d) { return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
 function fmtMonth(y,m) { return ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][m]+' '+y; }
+// ── Période de pointage : du 26 du mois précédent au 25 du mois courant ──
+function periodStart(y,m){ // m: 0-indexed — retourne 'YYYY-MM-26' du mois m-1
+  if(m===0) return `${y-1}-12-26`;
+  return `${y}-${String(m).padStart(2,'0')}-26`;
+}
+function periodEnd(y,m){ // m: 0-indexed — retourne 'YYYY-MM-25' du mois m
+  return `${y}-${String(m+1).padStart(2,'0')}-25`;
+}
+function getPeriodDates(y,m){ // m: 0-indexed — tableau de toutes les dates de la période
+  const start=new Date(periodStart(y,m)+'T12:00:00');
+  const end=new Date(periodEnd(y,m)+'T12:00:00');
+  const dates=[];
+  for(let d=new Date(start);d<=end;d.setDate(d.getDate()+1))
+    dates.push(d.toISOString().substring(0,10));
+  return dates;
+}
+function fmtPeriod(y,m){ // m: 0-indexed — '26 Avr → 25 Mai 2026'
+  const short=['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+  const prevM=m===0?11:m-1; const prevY=m===0?y-1:y;
+  return `26 ${short[prevM]} → 25 ${short[m]} ${y}`;
+}
 function fmtDT(iso) { if(!iso)return'—'; const d=new Date(iso); return d.toLocaleDateString('fr-FR')+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
 
 function setSyncStatus(status, text) {
@@ -920,8 +941,14 @@ const DB = {
   getPointage(siteId=null, year=null, month=null) {
     let e = Cache.pointage;
     if(siteId) e=e.filter(p=>p.site_id===siteId);
-    if(year!==null) e=e.filter(p=>p.date.startsWith(`${year}-`));
-    if(month!==null) { const m=String(month).padStart(2,'0'); e=e.filter(p=>p.date.startsWith(`${year}-${m}`)); }
+    if(year!==null && month!==null) {
+      // Période 26 du mois précédent → 25 du mois courant
+      const start=periodStart(year,month-1); // month est 1-indexed
+      const end=periodEnd(year,month-1);
+      e=e.filter(p=>p.date>=start&&p.date<=end);
+    } else if(year!==null) {
+      e=e.filter(p=>p.date.startsWith(`${year}-`));
+    }
     return e;
   },
   getPointageByEmpDate(empId, date) { return Cache.pointage.find(p=>p.employee_id===empId&&p.date===date)||null; },
@@ -1952,7 +1979,7 @@ const App = {
     const ym=`${this.currentYear}-${String(this.currentMonth+1).padStart(2,'0')}`;
     const lock=DB.getLock(this.currentSite,ym);
     const employees=this._getVisibleEmps(this.currentSite);
-    const dim=daysInMonth(this.currentYear,this.currentMonth);
+    const periodDates=getPeriodDates(this.currentYear,this.currentMonth);
     const entries=DB.getPointage(this.currentSite,this.currentYear,this.currentMonth+1);
 
     const extra=document.getElementById('topbar-extra');
@@ -1961,34 +1988,35 @@ const App = {
     const siteSelector=isKA?`<strong style="color:var(--text-muted)">${site?.nom||''}</strong>`:`<select onchange="App.changeSite(this.value)" style="max-width:220px">${sites.map(s=>`<option value="${s.id}" ${s.id===this.currentSite?'selected':''}>${s.nom}</option>`).join('')}</select>`;
     const legend=TYPES.map(t=>`<div class="legend-item"><div class="legend-dot" style="background:var(--${t.key}-bg);border:1px solid var(--${t.key})"></div><span>${t.label} (${t.short})</span></div>`).join('');
     const dayNames=['D','L','M','M','J','V','S'];
+    // Séparateur de mois : repère le changement de mois dans la période (ex: passage du mois précédent au mois courant)
+    const sepIdx=periodDates.findIndex(ds=>ds.substring(5,7)===String(this.currentMonth+1).padStart(2,'0'));
     let hdr='';
-    for(let d=1;d<=dim;d++){
-      const ds=fmtDate(this.currentYear,this.currentMonth,d);
-      const wd=dayOfWeek(this.currentYear,this.currentMonth,d);
-      const cls=DB.isHoliday(ds)?'day-ferie':wd===0||wd===6?'day-weekend':'';
-      hdr+=`<th class="${cls}" title="${DB.isHoliday(ds)?DB.getHolidayName(ds):''}">${dayNames[wd]}<br>${d}</th>`;
-    }
+    periodDates.forEach((ds,i)=>{
+      const wd=new Date(ds+'T12:00:00').getDay();
+      const dayNum=parseInt(ds.substring(8));
+      const cls=(DB.isHoliday(ds)?'day-ferie':wd===0||wd===6?'day-weekend':'')+(i<sepIdx?' prev-period':'');
+      hdr+=`<th class="${cls}" title="${DB.isHoliday(ds)?DB.getHolidayName(ds):''}" style="${i===sepIdx?'border-left:2px solid var(--accent-green)':''}">${dayNames[wd]}<br>${dayNum}</th>`;
+    });
     let rows='';
     employees.forEach(emp=>{
       let cells='';
-      for(let d=1;d<=dim;d++){
-        const ds=fmtDate(this.currentYear,this.currentMonth,d);
-        const wd=dayOfWeek(this.currentYear,this.currentMonth,d);
-        const isWE=wd===0||wd===6;
+      periodDates.forEach((ds,i)=>{
+        const wd=new Date(ds+'T12:00:00').getDay();
         const isFerie=DB.isHoliday(ds);
         const entry=entries.find(p=>p.employee_id===emp.id&&p.date===ds);
         const lc=lock?' locked':'';
         const ch=lock?'':`onclick="App.openSaisie('${emp.id}','${ds}')"`;
-        if(entry){const t=TYPES.find(x=>x.key===entry.type);const vm=entry.validated?' ✓':'';cells+=`<td class="has-entry"><button class="cell-btn ${entry.type}${lc}" ${ch} title="${t?.label||entry.type}${entry.notes?' — '+entry.notes:''}${vm?'(validé)':''}">${t?.short||entry.type}${vm}</button></td>`;}
-        else if(isFerie) cells+=`<td><button class="cell-btn ferie${lc}" ${ch} title="${DB.getHolidayName(ds)}">F</button></td>`;
-        else cells+=`<td><button class="cell-btn${lc}" style="color:#ccc;font-size:16px" ${ch}>·</button></td>`;
-      }
+        const sep=i===sepIdx?'border-left:2px solid var(--accent-green)':'';
+        if(entry){const t=TYPES.find(x=>x.key===entry.type);const vm=entry.validated?' ✓':'';cells+=`<td class="has-entry" style="${sep}"><button class="cell-btn ${entry.type}${lc}" ${ch} title="${t?.label||entry.type}${entry.notes?' — '+entry.notes:''}${vm?' (validé)':''}">${t?.short||entry.type}${vm}</button></td>`;}
+        else if(isFerie) cells+=`<td style="${sep}"><button class="cell-btn ferie${lc}" ${ch} title="${DB.getHolidayName(ds)}">F</button></td>`;
+        else cells+=`<td style="${sep}"><button class="cell-btn${lc}" style="color:#ccc;font-size:16px" ${ch}>·</button></td>`;
+      });
       rows+=`<tr><td class="col-emp"><div class="emp-name">${emp.prenom} ${emp.nom}</div><div class="emp-poste">${emp.poste}${emp.affectation?' · '+emp.affectation:''}</div></td>${cells}</tr>`;
     });
     document.getElementById('page-content').innerHTML=`
       <div class="grid-controls">
         ${siteSelector}
-        <div class="month-nav"><button onclick="App.prevMonth()">‹</button><span>${fmtMonth(this.currentYear,this.currentMonth)}</span><button onclick="App.nextMonth()">›</button></div>
+        <div class="month-nav"><button onclick="App.prevMonth()">‹</button><span>${fmtPeriod(this.currentYear,this.currentMonth)}</span><button onclick="App.nextMonth()">›</button></div>
         ${lock?`<div class="lock-indicator">🔒 Verrouillé par ${lock.locked_by}</div>`:''}
       </div>
       <div class="legend">${legend}</div>
@@ -2998,7 +3026,7 @@ const App = {
     }).join('');
     this.showModal(`
       <div class="modal-header">
-        <div class="modal-title">📋 ${emp.prenom} ${emp.nom} — ${fmtMonth(year,month-1)}</div>
+        <div class="modal-title">📋 ${emp.prenom} ${emp.nom} — ${fmtPeriod(year,month-1)}</div>
         <button class="modal-close" onclick="App.closeModal()">✕</button>
       </div>
       <p class="text-muted text-sm" style="margin-bottom:10px">${emp.poste}${emp.affectation?` · ${emp.affectation}`:''} · Site habituel : ${DB.getSiteById(emp.site_id)?.nom||'?'}</p>
@@ -3046,7 +3074,7 @@ const App = {
     }).join('');
     document.getElementById('page-content').innerHTML=`
       <div class="grid-controls">
-        <div class="month-nav"><button onclick="App.prevMonth();App.renderValidation()">‹</button><span>${fmtMonth(this.currentYear,this.currentMonth)}</span><button onclick="App.nextMonth();App.renderValidation()">›</button></div>
+        <div class="month-nav"><button onclick="App.prevMonth();App.renderValidation()">‹</button><span>${fmtPeriod(this.currentYear,this.currentMonth)}</span><button onclick="App.nextMonth();App.renderValidation()">›</button></div>
         ${entries.length?`<button class="btn btn-success btn-sm" onclick="App.validateAll()">✓ Tout valider</button>`:''}
       </div>
       ${!entries.length?'<div class="alert alert-success">✓ Toutes les entrées sont validées.</div>':''}
