@@ -144,7 +144,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: employee } = await sbAdmin
       .from('sh_employees')
-      .select('site_id, pointage_horaire, has_rotation, require_gps')
+      .select('site_id, pointage_horaire, has_rotation, require_gps, sites_secondaires')
       .eq('id', empId)
       .single();
 
@@ -222,14 +222,22 @@ Deno.serve(async (req: Request) => {
 
     // ── 6. Vérification géofence SERVEUR ─────────────────────
     // Ignorée si l'employé est en télétravail (require_gps === false)
-    if (effectiveSiteId && employee.require_gps !== false) {
-      const { data: site } = await sbAdmin
-        .from('sh_sites')
-        .select('latitude, longitude, geofence_radius')
-        .eq('id', effectiveSiteId)
-        .single();
+    // Pour les collaborateurs multi-sites, on vérifie contre TOUS leurs sites autorisés.
+    // Le premier site dans le rayon devient le site effectif du shift.
+    let matchedSiteId: string | null = null; // site GPS validé (peut différer du site principal)
 
-      if (site?.latitude && site?.longitude) {
+    if (employee.require_gps !== false) {
+      // Construire la liste des sites à vérifier :
+      // Si détachement actif → uniquement le site de détachement
+      // Sinon → site principal + sites secondaires
+      const sitesToCheck: string[] = tempAssign?.site_id_temp
+        ? [tempAssign.site_id_temp]
+        : [
+            ...(employee.site_id ? [employee.site_id] : []),
+            ...(Array.isArray(employee.sites_secondaires) ? employee.sites_secondaires : []),
+          ];
+
+      if (sitesToCheck.length > 0) {
         if (latitude == null || longitude == null) {
           return Response.json(
             { error: 'Position GPS requise pour pointer' },
@@ -237,22 +245,52 @@ Deno.serve(async (req: Request) => {
           );
         }
 
-        const radius = site.geofence_radius ?? 50;
-        const dist = haversineDistance(
-          Number(latitude), Number(longitude),
-          Number(site.latitude), Number(site.longitude)
-        );
+        // Charger les coordonnées de tous les sites à vérifier en une seule requête
+        const { data: sitesData } = await sbAdmin
+          .from('sh_sites')
+          .select('id, nom, latitude, longitude, geofence_radius')
+          .in('id', sitesToCheck);
 
-        if (dist > radius) {
+        // Chercher le site le plus proche dans le rayon autorisé
+        let closestDist = Infinity;
+        let closestSite: { id: string; nom: string; geofence_radius: number } | null = null;
+
+        for (const site of sitesData ?? []) {
+          if (!site.latitude || !site.longitude) continue;
+          const dist = haversineDistance(
+            Number(latitude), Number(longitude),
+            Number(site.latitude), Number(site.longitude)
+          );
+          const radius = site.geofence_radius ?? 50;
+          if (dist <= radius && dist < closestDist) {
+            closestDist = dist;
+            closestSite = site;
+          }
+        }
+
+        if (!closestSite) {
+          // Calculer la distance minimale pour le message d'erreur
+          let minDist = Infinity;
+          let minRadius = 50;
+          for (const site of sitesData ?? []) {
+            if (!site.latitude || !site.longitude) continue;
+            const dist = haversineDistance(
+              Number(latitude), Number(longitude),
+              Number(site.latitude), Number(site.longitude)
+            );
+            if (dist < minDist) { minDist = dist; minRadius = site.geofence_radius ?? 50; }
+          }
+          const siteCount = sitesToCheck.length;
+          const msg = siteCount > 1
+            ? `Vous n'êtes sur aucun de vos ${siteCount} sites autorisés. Site le plus proche : ${Math.round(minDist)}m (rayon autorisé : ${minRadius}m).`
+            : `Vous êtes à ${Math.round(minDist)}m de votre site. Rapprochez-vous à moins de ${minRadius}m pour pointer.`;
           return Response.json(
-            {
-              error: `Vous êtes à ${Math.round(dist)}m de votre site. Rapprochez-vous à moins de ${radius}m pour pointer.`,
-              distanceMeters: Math.round(dist),
-              radiusMeters: radius
-            },
+            { error: msg, distanceMeters: Math.round(minDist), radiusMeters: minRadius },
             { status: 403, headers: corsHeaders }
           );
         }
+
+        matchedSiteId = closestSite.id;
       }
     }
 
@@ -275,10 +313,13 @@ Deno.serve(async (req: Request) => {
         return Response.json({ error: 'Shift déjà démarré' }, { status: 409, headers: corsHeaders });
       }
 
+      // Utiliser le site GPS validé si disponible, sinon le site effectif (détachement ou principal)
+      const shiftSiteId = matchedSiteId ?? effectiveSiteId;
+
       const shiftData: Record<string, unknown> = {
         id: `sh_${empId}_${today}`,
         employee_id: empId,
-        site_id: effectiveSiteId,
+        site_id: shiftSiteId,
         date: today,
         heure_arrivee: serverTime,    // ← timestamp serveur
         created_by: profile.username,

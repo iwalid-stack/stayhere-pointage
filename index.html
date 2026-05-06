@@ -2850,6 +2850,19 @@ const App = {
       <option value="BeInterim" ${emp?.societe==='BeInterim'?'selected':''}>BeInterim</option>
     </select></div>
     <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+      <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">🏢 Sites autorisés pour le pointage GPS</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Le site principal est toujours inclus. Cochez les sites supplémentaires pour les collaborateurs multi-sites.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        ${sites.filter(s=>s.id!==emp?.site_id).map(s=>{
+          const checked=(emp?.sites_secondaires||[]).includes(s.id);
+          return`<label class="perm-item ${checked?'checked':''}" style="display:inline-flex;cursor:pointer;padding:6px 10px">
+            <input type="checkbox" class="emp-sites-sec" value="${s.id}" ${checked?'checked':''} onchange="this.closest('.perm-item').classList.toggle('checked',this.checked)">
+            <span>${s.nom}</span>
+          </label>`;
+        }).join('')}
+      </div>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
       <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">⏱ Pointage horaire</div>
       <div style="margin-bottom:12px">
         <label class="perm-item ${emp?.pointage_horaire!==false?'checked':''}" style="display:inline-flex;cursor:pointer">
@@ -2886,11 +2899,12 @@ const App = {
     const societe=document.getElementById('emp-societe')?.value||null;
     const heureDebut=document.getElementById('emp-hdebut')?.value;
     const heureFin=document.getElementById('emp-hfin')?.value;
+    const sites_secondaires=[...document.querySelectorAll('.emp-sites-sec:checked')].map(cb=>cb.value);
     if(!prenom||!nom){alert('Prénom et nom requis.');return;}
     setSyncStatus('busy','↻...');
     let empId=id;
-    if(id) await DB.updateEmployee(id,{imm,prenom,nom,poste,site_id,affectation,pointage_horaire,require_gps,societe});
-    else { const e={imm,prenom,nom,poste,site_id,affectation,pointage_horaire,require_gps,societe}; await DB.addEmployee(e); empId=e.id; }
+    if(id) await DB.updateEmployee(id,{imm,prenom,nom,poste,site_id,affectation,pointage_horaire,require_gps,societe,sites_secondaires});
+    else { const e={imm,prenom,nom,poste,site_id,affectation,pointage_horaire,require_gps,societe,sites_secondaires}; await DB.addEmployee(e); empId=e.id; }
     if(pointage_horaire&&heureDebut&&heureFin) await DB.setSchedule(empId,heureDebut,heureFin);
     setSyncStatus('ok','● En ligne'); this.closeModal(); this.renderCollaborateurs();
   },
