@@ -224,6 +224,15 @@ table.data-table{width:100%;border-collapse:collapse;font-size:13px}
 .shift-table tr:last-child td{border-bottom:none}
 .shift-table tr:hover td{background:rgba(255,98,44,0.03)}
 .shift-status{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;gap:4px}
+.shift-toast{position:fixed;bottom:24px;right:24px;background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--accent-green);border-radius:10px;padding:12px 16px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 30px rgba(0,0,0,0.18);z-index:9999;transform:translateX(130%);transition:transform 0.35s cubic-bezier(.4,0,.2,1);max-width:360px;min-width:260px}
+.shift-toast.visible{transform:translateX(0)}
+.shift-toast+.shift-toast{bottom:96px}
+.shift-toast+.shift-toast+.shift-toast{bottom:168px}
+.shift-toast-icon{font-size:22px;flex-shrink:0}
+.live-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--danger);padding:3px 8px;border-radius:12px;background:rgba(217,48,37,0.1);animation:live-pulse 2s infinite}
+@keyframes live-pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+.shift-row-flash{animation:row-flash 1.5s ease}
+@keyframes row-flash{0%{background:rgba(0,129,96,0.25)}100%{background:transparent}}
 .shift-complet{background:var(--travaille-bg);color:var(--travaille)}
 .shift-incomplet{background:var(--maladie-bg);color:var(--maladie)}
 .shift-en_cours{background:#fff8e1;color:#c07000}
@@ -1821,12 +1830,38 @@ const App = {
         if(this.currentPage==='verrous') this.renderVerrous();
         if(this.currentPage==='pointage') this.renderPointage();
       })
-      .on('postgres_changes',{event:'*',schema:'public',table:'sh_shifts'}, async ()=>{
-        setSyncStatus('busy','↻ Mise à jour...');
-        const {data}=await SB.from('sh_shifts').select('*').order('date',{ascending:false}).limit(2000);
-        Cache.shifts=data||[];
-        setSyncStatus('ok','● En ligne');
-        if(this.currentPage==='shifts') this.renderShifts();
+      .on('postgres_changes',{event:'*',schema:'public',table:'sh_shifts'}, async (payload)=>{
+        // Mise à jour ciblée du cache (pas de rechargement global)
+        const rec=payload.new||{};
+        const old=payload.old||{};
+        if(rec.id){
+          const idx=Cache.shifts.findIndex(s=>s.id===rec.id);
+          if(idx!==-1) Cache.shifts[idx]=rec; else Cache.shifts.unshift(rec);
+        }
+        // Toast de notification si pointage temps-réel depuis l'app mobile
+        const emp=Cache.employees.find(e=>e.id===rec.employee_id);
+        if(emp){
+          if(rec.heure_arrivee&&!old.heure_arrivee)
+            this._shiftToast(emp,'arrivée',rec.heure_arrivee,rec.site_id,'green');
+          else if(rec.heure_depart&&!old.heure_depart)
+            this._shiftToast(emp,'fin de shift',rec.heure_depart,rec.site_id,'orange');
+          else if(rec.heure_arrivee_2&&!old.heure_arrivee_2)
+            this._shiftToast(emp,'arrivée (2ème shift)',rec.heure_arrivee_2,rec.site_id,'green');
+          else if(rec.heure_depart_2&&!old.heure_depart_2)
+            this._shiftToast(emp,'fin de 2ème shift',rec.heure_depart_2,rec.site_id,'orange');
+        }
+        if(this.currentPage==='shifts'){
+          this.renderShifts();
+          // Flash visuel sur la ligne de l'employé mis à jour
+          if(rec.employee_id){
+            requestAnimationFrame(()=>{
+              document.querySelectorAll('#page-content tbody tr').forEach(tr=>{
+                if(tr.textContent.includes(emp?.prenom||'')&&tr.textContent.includes(emp?.nom||''))
+                  tr.classList.add('shift-row-flash');
+              });
+            });
+          }
+        }
       })
       .on('postgres_changes',{event:'UPDATE',schema:'public',table:'sh_users'}, async (payload)=>{
         // Refresh users cache
@@ -2092,6 +2127,27 @@ const App = {
 
   // ---- POINTAGE HORAIRE ----
   _shiftDate: new Date().toISOString().substring(0,10),
+  _toastQueue: [],
+  _shiftToast(emp, action, time, siteId, color='green'){
+    // Empiler max 3 toasts
+    if(this._toastQueue.length>=3) return;
+    const site=DB.getSiteById(siteId);
+    const siteName=site?.nom?.replace(/StayHere - /,'').replace(/ Residential Living| Heritage| Collection/,'')??'';
+    const icon=color==='green'?'🟢':'🟠';
+    const el=document.createElement('div');
+    el.className='shift-toast';
+    // décalage vertical pour empiler
+    const offset=this._toastQueue.length*84;
+    el.style.bottom=(24+offset)+'px';
+    el.innerHTML=`<div class="shift-toast-icon">${icon}</div><div><strong>${emp.prenom} ${emp.nom}</strong><br><span style="font-size:12px;color:var(--text-muted)">${action} · <b>${time}</b>${siteName?' · '+siteName:''}</span></div>`;
+    document.body.appendChild(el);
+    this._toastQueue.push(el);
+    requestAnimationFrame(()=>el.classList.add('visible'));
+    setTimeout(()=>{
+      el.classList.remove('visible');
+      setTimeout(()=>{ el.remove(); this._toastQueue=this._toastQueue.filter(t=>t!==el); },350);
+    },6000);
+  },
 
   renderShifts() {
     const isKA=currentSession.role==='kindness_ambassador';
@@ -2245,6 +2301,8 @@ const App = {
         </div>
         <button class="btn btn-ghost btn-sm" onclick="App.goToday()">Aujourd'hui</button>
         ${unvalidated>0&&(isKA||currentSession.role==='cluster_ops')?`<button class="btn btn-success btn-sm" onclick="App.validateAllShifts()">✓ Tout valider (${unvalidated})</button>`:''}
+        <span class="live-badge">● Live</span>
+        <span style="font-size:11px;color:var(--text-muted)" title="Dernière mise à jour automatique">Mis à jour : ${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>
       </div>
       ${pendingBlock}
       <div class="alert alert-${isKA&&!this.canManage()?'warning':'info'}" style="margin-bottom:16px">
