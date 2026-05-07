@@ -416,7 +416,14 @@ async function loadAll() {
   const byUsername = new Map();
   for (const u of (users.data||[])) byUsername.set(u.username, u);
   for (const p of (userProfiles.data||[])) {
-    if (!byUsername.has(p.username)) byUsername.set(p.username, p);
+    if (!byUsername.has(p.username)) {
+      byUsername.set(p.username, p);
+    } else {
+      // Pour les users dans sh_users : compléter first/last_login_at depuis sh_user_profiles si absent
+      const existing = byUsername.get(p.username);
+      if(!existing.first_login_at && p.first_login_at) existing.first_login_at = p.first_login_at;
+      if(!existing.last_login_at  && p.last_login_at)  existing.last_login_at  = p.last_login_at;
+    }
   }
   Cache.users = [...byUsername.values()];
   Cache.sites = sites.data||[];
@@ -1885,6 +1892,18 @@ const App = {
           return;
         }
         // Rafraîchir la page utilisateurs si elle est ouverte
+        if(this.currentPage==='utilisateurs') this.renderUtilisateurs();
+      })
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'sh_user_profiles'}, async (payload)=>{
+        // Mise à jour ciblée du cache pour les users venant de sh_user_profiles
+        if(payload.new?.username) {
+          const idx=Cache.users.findIndex(u=>u.username===payload.new.username);
+          if(idx!==-1) {
+            // Ne mettre à jour que les champs login (ne pas écraser les données sh_users)
+            if(payload.new.first_login_at) Cache.users[idx].first_login_at=payload.new.first_login_at;
+            if(payload.new.last_login_at)  Cache.users[idx].last_login_at=payload.new.last_login_at;
+          }
+        }
         if(this.currentPage==='utilisateurs') this.renderUtilisateurs();
       })
       .on('postgres_changes',{event:'*',schema:'public',table:'sh_employees'}, async ()=>{

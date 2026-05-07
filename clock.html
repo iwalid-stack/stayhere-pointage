@@ -219,13 +219,18 @@ function slugify(s) {
 function _trackLogin(username) {
   if(!username) return;
   const now = new Date().toISOString();
-  // On vérifie d'abord si first_login_at est déjà rempli
-  SB.from('sh_users').select('first_login_at').eq('username', username).single()
-    .then(({data}) => {
-      const upd = { last_login_at: now };
-      if(!data?.first_login_at) upd.first_login_at = now;
-      SB.from('sh_users').update(upd).eq('username', username).then(()=>{});
-    });
+  // Cherche dans les deux tables pour savoir si first_login_at est déjà rempli
+  Promise.all([
+    SB.from('sh_users').select('first_login_at').eq('username', username).maybeSingle(),
+    SB.from('sh_user_profiles').select('first_login_at').eq('username', username).maybeSingle(),
+  ]).then(([r1, r2]) => {
+    const alreadyFirst = r1.data?.first_login_at || r2.data?.first_login_at;
+    const upd = { last_login_at: now };
+    if(!alreadyFirst) upd.first_login_at = now;
+    // Met à jour les deux tables (la bonne sera trouvée, l'autre 0 lignes sans erreur)
+    SB.from('sh_users').update(upd).eq('username', username).then(()=>{});
+    SB.from('sh_user_profiles').update(upd).eq('username', username).then(()=>{});
+  });
 }
 
 // ================================================================
