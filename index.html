@@ -2127,6 +2127,7 @@ const App = {
 
   // ---- POINTAGE HORAIRE ----
   _shiftDate: new Date().toISOString().substring(0,10),
+  _shiftsGlobal: false,
   _toastQueue: [],
   _shiftToast(emp, action, time, siteId, color='green'){
     // Empiler max 3 toasts
@@ -2150,6 +2151,7 @@ const App = {
   },
 
   renderShifts() {
+    if(this._shiftsGlobal&&this.canGlobal()){this.renderShiftsGlobal();return;}
     const isKA=currentSession.role==='kindness_ambassador';
     const sites=DB.getSites().filter(s=>s.actif);
     const site=DB.getSiteById(this.currentSite);
@@ -2301,6 +2303,7 @@ const App = {
         </div>
         <button class="btn btn-ghost btn-sm" onclick="App.goToday()">Aujourd'hui</button>
         ${unvalidated>0&&(isKA||currentSession.role==='cluster_ops')?`<button class="btn btn-success btn-sm" onclick="App.validateAllShifts()">✓ Tout valider (${unvalidated})</button>`:''}
+        ${this.canGlobal()?`<button class="btn btn-secondary btn-sm" onclick="App._shiftsGlobal=true;App.renderShifts()" title="Voir tous les sites en une seule vue">🌐 Tous les sites</button>`:''}
         <span class="live-badge">● Live</span>
         <span style="font-size:11px;color:var(--text-muted)" title="Dernière mise à jour automatique">Mis à jour : ${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>
       </div>
@@ -2323,6 +2326,166 @@ const App = {
     const months=['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
     const wd=new Date(y,m-1,d).getDay();
     return `${days[wd]} ${parseInt(d)} ${months[m-1]} ${y}`;
+  },
+
+  // ---- VUE GLOBALE POINTAGE HORAIRE (tous sites) ----
+  renderShiftsGlobal() {
+    const date=this._shiftDate;
+    const sites=DB.getSites().filter(s=>s.actif);
+    const canEdit=this.canManage();
+    const canValidateShift=this.canValidate()||this.canManage();
+    const allPending=DB.getPendingShiftChanges(null);
+    const pendingBlock=canEdit&&allPending.length>0?`
+      <div class="card" style="border-left:3px solid var(--accent);margin-bottom:16px">
+        <div class="card-header" style="margin-bottom:12px">
+          <div class="card-title">🔔 ${allPending.length} demande${allPending.length>1?'s':''} de modification en attente</div>
+        </div>
+        <div class="table-wrapper"><table class="data-table">
+          <thead><tr><th>Collaborateur</th><th>Date</th><th>Demande</th><th>Motif</th><th>Par</th><th>Actions</th></tr></thead>
+          <tbody>${allPending.map(r=>{
+            const e=DB.getEmployees().find(x=>x.id===r.employee_id);
+            const st=DB.getSiteById(r.site_id);
+            const sh=DB.getShiftByEmpDate(r.employee_id,r.date);
+            const ch=[];
+            if(r.heure_arrivee!==null) ch.push('Arrivée : '+( sh?.heure_arrivee||'—')+' → '+r.heure_arrivee);
+            if(r.heure_depart!==null) ch.push('Départ : '+(sh?.heure_depart||'—')+' → '+r.heure_depart);
+            if(r.create_if_missing) ch.push('<em>Création du shift</em>');
+            return`<tr><td><strong>${e?e.prenom+' '+e.nom:'—'}</strong><br><span class="text-muted" style="font-size:11px">${st?.nom||''}</span></td>
+              <td>${this.fmtDateFr(r.date)}</td><td style="font-size:12px">${ch.join('<br>')}</td>
+              <td style="font-size:12px;color:var(--text-muted)">${r.reason||'—'}</td>
+              <td style="font-size:11px">${r.requested_by}</td>
+              <td><div style="display:flex;gap:6px">
+                <button class="btn btn-success btn-xs" onclick="App.approveShiftChange('${r.id}')">✓</button>
+                <button class="btn btn-danger btn-xs" onclick="App.rejectShiftChange('${r.id}')">✕</button>
+              </div></td></tr>`;
+          }).join('')}</tbody>
+        </table></div>
+      </div>`:'';
+
+    // Stats globales
+    let gTotal=0,gPresent=0,gEnCours=0,gComplet=0;
+    let sections='';
+    sites.forEach(site=>{
+      const emps=DB.getEmployees().filter(e=>e.actif&&e.pointage_horaire!==false&&DB.getEffectiveSiteId(e.id,date)===site.id);
+      if(!emps.length) return;
+      const siteShifts=DB.getShifts(site.id,date);
+      const lock=DB.getLock(site.id,date.substring(0,7));
+      let sEnCours=0,sComplet=0,sVide=0;
+      const rows=emps.map(emp=>{
+        const schedule=DB.getSchedule(emp.id);
+        const shift=siteShifts.find(s=>s.employee_id===emp.id)||null;
+        const statut=DB.shiftStatut(shift,schedule);
+        if(statut==='en_cours') {sEnCours++;gEnCours++;}
+        else if(statut==='complet'){sComplet++;gComplet++;}
+        else sVide++;
+        gTotal++; if(statut!=='vide') gPresent++;
+        return this._shiftRowHtml(emp,date,siteShifts,lock,canEdit,false,canValidateShift,false);
+      }).join('');
+      const siteShort=site.nom.replace('StayHere - ','');
+      const statsBadges=
+        (sEnCours?`<span style="background:rgba(0,129,96,0.15);color:var(--accent-green);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">● ${sEnCours} en cours</span> `:'')
+       +(sComplet?`<span style="background:rgba(2,119,189,0.12);color:var(--info);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">✓ ${sComplet} complet${sComplet>1?'s':''}</span> `:'')
+       +(sVide?`<span style="color:var(--text-muted);font-size:11px">${sVide} non pointé${sVide>1?'s':''}</span>`:'');
+      sections+=`<div class="card" style="padding:0;overflow:hidden;margin-bottom:14px">
+        <div style="padding:10px 16px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <strong style="font-size:13px">${siteShort}</strong>
+          <span style="font-size:11px;color:var(--text-muted)">${emps.length} collaborateur${emps.length>1?'s':''}</span>
+          ${statsBadges}
+          ${lock?'<span style="font-size:11px;color:var(--text-muted)">🔒 Verrouillé</span>':''}
+        </div>
+        <div style="overflow-x:auto"><table class="shift-table">
+          <thead><tr><th>Collaborateur</th><th>Planning</th><th>Arrivée</th><th>Départ</th><th>2ème shift</th><th>Durée</th><th>Statut</th><th>Actions</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+      </div>`;
+    });
+
+    const summaryBar=`<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 0;margin-bottom:14px">
+      <span style="font-weight:700;font-size:13px">Total : ${gTotal} collaborateurs</span>
+      <span style="background:rgba(0,129,96,0.15);color:var(--accent-green);padding:3px 10px;border-radius:10px;font-size:12px;font-weight:700">● ${gEnCours} en cours</span>
+      <span style="background:rgba(2,119,189,0.12);color:var(--info);padding:3px 10px;border-radius:10px;font-size:12px;font-weight:700">✓ ${gComplet} complétés</span>
+      <span style="color:var(--text-muted);font-size:12px">${gTotal-gPresent} non pointés</span>
+    </div>`;
+
+    document.getElementById('page-content').innerHTML=`
+      <div class="grid-controls" style="flex-wrap:wrap;gap:12px">
+        <div class="date-nav">
+          <button onclick="App.prevDay()">‹</button>
+          <span>${this.fmtDateFr(date)}</span>
+          <button onclick="App.nextDay()">›</button>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="App.goToday()">Aujourd'hui</button>
+        <button class="btn btn-primary btn-sm" onclick="App._shiftsGlobal=false;App.renderShifts()" title="Revenir à la vue par site">🏢 Par site</button>
+        <span class="live-badge">● Live</span>
+        <span style="font-size:11px;color:var(--text-muted)">Mis à jour : ${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>
+      </div>
+      ${pendingBlock}
+      ${summaryBar}
+      ${sections||'<div class="alert alert-warning">Aucun collaborateur avec pointage horaire activé.</div>'}`;
+  },
+
+  // Construit le HTML d'une ligne shift (partagé par vue site et vue globale)
+  _shiftRowHtml(emp, date, shifts, lock, canEdit, canRequest, canValidateShift, isKA) {
+    const schedule=DB.getSchedule(emp.id);
+    const shift=shifts.find(s=>s.employee_id===emp.id)||null;
+    const statut=DB.shiftStatut(shift,schedule);
+    const statutLabels={complet:'Complet',incomplet:'Incomplet',en_cours:'En cours',vide:'—'};
+    const pendingReq=Cache.shiftChangeRequests.find(r=>r.employee_id===emp.id&&r.date===date&&r.status==='pending');
+    const retard1=shift?.retard_minutes>0?`<span class="retard-badge">+${DB.fmtMinutes(shift.retard_minutes)}</span>`:'';
+    const schedBadge=schedule?`<span class="schedule-badge">${schedule.heure_debut}–${schedule.heure_fin}</span>`:`<span class="schedule-badge" style="color:#f57c00">Non conf.</span>`;
+    const validated=shift?.validated_by_ka?`<span class="badge badge-success" style="font-size:10px">✓ ${shift.validated_by_ka}</span>`:'';
+    let arriveBtn='<span class="text-muted" style="font-size:12px">—</span>';
+    if(canEdit){
+      arriveBtn=(!shift||!shift.heure_arrivee)
+        ?`<button class="btn btn-primary btn-xs" onclick="App.openPointageArrivee('${emp.id}','${date}',1)">▶ Arrivée</button>`
+        :`<span class="time-pill ${shift.retard_minutes>0?'retard':''}" onclick="App.openPointageArrivee('${emp.id}','${date}',1)" title="Modifier">🕐 ${shift.heure_arrivee}${retard1}</span>`;
+    } else if(canRequest){
+      arriveBtn=shift?.heure_arrivee?`<span class="time-pill" style="opacity:0.7">🕐 ${shift.heure_arrivee}${retard1}</span>`:'<span class="text-muted" style="font-size:12px">—</span>';
+    } else if(shift?.heure_arrivee){
+      arriveBtn=`<span style="font-size:12px">🕐 ${shift.heure_arrivee}${retard1}</span>`;
+    }
+    let departBtn='<span class="text-muted" style="font-size:12px">—</span>';
+    if(canEdit){
+      departBtn=shift?.heure_arrivee&&!shift.heure_depart
+        ?`<button class="btn btn-secondary btn-xs" onclick="App.openPointageDepart('${emp.id}','${date}',1)">⏹ Départ</button>`
+        :shift?.heure_depart?`<span class="time-pill" onclick="App.openPointageDepart('${emp.id}','${date}',1)" title="Modifier">🕐 ${shift.heure_depart}</span>`
+        :'<span class="text-muted" style="font-size:12px">—</span>';
+    } else if(shift?.heure_depart){
+      departBtn=`<span style="font-size:12px">🕐 ${shift.heure_depart}</span>`;
+    }
+    const hasShift1Done=shift?.heure_arrivee&&shift?.heure_depart;
+    const hasShift2=shift?.heure_arrivee_2;
+    const retard2=shift?.retard_minutes_2>0?`<span class="retard-badge">+${DB.fmtMinutes(shift.retard_minutes_2)}</span>`:'';
+    let doubleCol='<span class="text-muted" style="font-size:11px">—</span>';
+    if(hasShift1Done&&canEdit){
+      if(!hasShift2) doubleCol=`<button class="btn btn-ghost btn-xs" onclick="App.openDoubleShift('${emp.id}','${date}')">+ 2ème shift</button>`;
+      else {
+        const arr2=`<span class="time-pill ${shift.retard_minutes_2>0?'retard':''}" onclick="App.openDoubleShift('${emp.id}','${date}')">🕐 ${shift.heure_arrivee_2}${retard2}</span>`;
+        const dep2=shift.heure_depart_2?`→ <span class="time-pill" onclick="App.openDoubleShift('${emp.id}','${date}')">🕐 ${shift.heure_depart_2}</span>`
+          :`<button class="btn btn-secondary btn-xs" onclick="App.openDoubleShiftDepart('${emp.id}','${date}')">⏹ Départ 2</button>`;
+        doubleCol=`<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${arr2}${dep2}</div>`;
+      }
+    } else if(hasShift2){
+      doubleCol=`<span style="font-size:11px;color:var(--text-muted)">🕐 ${shift.heure_arrivee_2}${shift.heure_depart_2?'→'+shift.heure_depart_2:' (en cours)'}</span>`;
+    }
+    const dureeTotale=(shift?.duree_minutes||0)+(shift?.duree_minutes_2||0);
+    const dureeStr=dureeTotale>0?`<span style="font-size:12px;font-weight:600">${DB.fmtMinutes(dureeTotale)}${shift?.duree_minutes_2>0?' <span style="font-size:10px;color:var(--info)">(2×)</span>':''}</span>`:'—';
+    const valBtn=canValidateShift&&shift&&shift.heure_arrivee&&!shift.validated_by_ka
+      ?`<button class="btn btn-success btn-xs" onclick="App.validateShift('${shift.id}')">✓ Valider</button>`
+      :validated;
+    const kaRequestBtn=canRequest?(pendingReq
+      ?`<span class="badge badge-warning" style="font-size:10px">⏳ En attente</span>`
+      :`<button class="btn btn-ghost btn-xs" onclick="App.openShiftChangeRequest('${emp.id}','${date}')">✎ Modifier</button>`):'';
+    return`<tr>
+      <td><strong>${emp.prenom} ${emp.nom}</strong><br><span class="text-muted" style="font-size:11px">${emp.poste}</span></td>
+      <td>${schedBadge}</td>
+      <td>${arriveBtn}</td>
+      <td>${departBtn}</td>
+      <td>${doubleCol}</td>
+      <td>${dureeStr}</td>
+      <td><span class="shift-status shift-${statut}">${statutLabels[statut]}</span></td>
+      <td><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${valBtn}${kaRequestBtn}</div></td>
+    </tr>`;
   },
 
   prevDay() {
