@@ -248,7 +248,8 @@ function checkGeofence() {
   // Si aucune coordonnée configurée pour le site, pointage autorisé sans restriction
   if(!siteCoords?.latitude || !siteCoords?.longitude) return Promise.resolve({ok:true});
 
-  const radius = siteCoords.geofence_radius || 50;
+  // Fallback 100m (et non 50m) pour éviter les blocages liés à un cache ancien
+  const radius = (siteCoords.geofence_radius != null ? Number(siteCoords.geofence_radius) : 0) || 100;
 
   if(!navigator.geolocation) {
     return Promise.resolve({ok:false, reason:'La géolocalisation n\'est pas disponible sur cet appareil.'});
@@ -262,7 +263,11 @@ function checkGeofence() {
           siteCoords.latitude, siteCoords.longitude
         );
         const distInt = Math.round(dist);
-        if(dist <= radius) {
+        // Marge GPS : on soustrait la moitié de la précision déclarée (max 25m)
+        // pour compenser l'imprécision naturelle du GPS en intérieur
+        const gpsMargin = Math.min(Math.round((pos.coords.accuracy || 0) * 0.5), 25);
+        const effectiveDist = Math.max(0, dist - gpsMargin);
+        if(effectiveDist <= radius) {
           resolve({ok:true, dist:distInt});
         } else {
           resolve({
