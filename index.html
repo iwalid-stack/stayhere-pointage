@@ -4062,11 +4062,15 @@ const App = {
 
   // ---- UTILISATEURS ----
   _userSearch: '',
-  renderUtilisateurs(search, filterNeverLogged=null){
+  _userLoginFilter: null, // null=tous | 'connected' | 'never'
+  renderUtilisateurs(search, loginFilter){
     if(search!==undefined) this._userSearch=search;
-    if(filterNeverLogged!==null) this._userFilterNeverLogged=filterNeverLogged;
+    if(loginFilter!==undefined){
+      // toggle : cliquer le filtre actif revient à tout afficher
+      this._userLoginFilter = (this._userLoginFilter===loginFilter) ? null : loginFilter;
+    }
     const q=(this._userSearch||'').toLowerCase().trim();
-    const onlyNeverLogged=this._userFilterNeverLogged||false;
+    const lf=this._userLoginFilter; // null | 'connected' | 'never'
     const extra=document.getElementById('topbar-extra');
     if(extra) extra.innerHTML=`<button class="btn btn-primary btn-sm" onclick="App.openAddUser()">+ Nouvel utilisateur</button>`;
     const getRoleLabel=role=>{const r=DB.getRoleById(role);return r?r.nom:(ROLES[role]||role);};
@@ -4077,7 +4081,8 @@ const App = {
       const site=u.site_id?DB.getSiteById(u.site_id):null;
       return `${u.username} ${u.nom} ${getRoleLabel(u.role)} ${site?.nom||''}`.toLowerCase().includes(q);
     }):all;
-    if(onlyNeverLogged) filtered=filtered.filter(u=>!u.first_login_at);
+    if(lf==='never')     filtered=filtered.filter(u=>!u.first_login_at);
+    if(lf==='connected') filtered=filtered.filter(u=>!!u.first_login_at);
     // Tri : jamais connectés en premier, puis par last_login_at décroissant
     filtered=[...filtered].sort((a,b)=>{
       if(!a.first_login_at&&b.first_login_at) return -1;
@@ -4131,18 +4136,19 @@ const App = {
         </td>
       </tr>`;
     }).join('');
-    const countLabel=`<span class="text-muted text-sm">${filtered.length}${q||onlyNeverLogged?' / '+all.length:''} utilisateur${filtered.length>1?'s':''}</span>`;
+    const countLabel=`<span class="text-muted text-sm">${filtered.length}${q||lf?' / '+all.length:''} utilisateur${filtered.length>1?'s':''}</span>`;
+    const cardStyle=(active,accentColor)=>`cursor:pointer;user-select:none;background:var(--surface);border:2px solid ${active?accentColor:'var(--border)'};border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:8px;transition:border-color .15s;${active?'box-shadow:0 0 0 3px '+accentColor+'22;':''}`;
     document.getElementById('page-content').innerHTML=`
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:8px">
+        <div style="${cardStyle(lf==='connected','var(--accent-green)')}" onclick="App.renderUtilisateurs(undefined,'connected')" title="Filtrer : déjà connectés">
           <span style="font-size:20px">✅</span>
           <div><div style="font-size:18px;font-weight:800;color:var(--accent-green)">${connectedCount}</div><div style="font-size:11px;color:var(--text-muted)">Déjà connectés</div></div>
         </div>
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:8px;${neverCount>0?'border-color:var(--accent);':''}">
+        <div style="${cardStyle(lf==='never','var(--accent)')}" onclick="App.renderUtilisateurs(undefined,'never')" title="Filtrer : jamais connectés">
           <span style="font-size:20px">⚫</span>
           <div><div style="font-size:18px;font-weight:800;color:${neverCount>0?'var(--accent)':'var(--text-muted)'}">${neverCount}</div><div style="font-size:11px;color:var(--text-muted)">Jamais connectés</div></div>
         </div>
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:8px">
+        <div style="${cardStyle(lf===null&&!q,'var(--text-muted)')}" onclick="App.renderUtilisateurs(undefined,null)" title="Afficher tous">
           <span style="font-size:20px">👥</span>
           <div><div style="font-size:18px;font-weight:800">${all.length}</div><div style="font-size:11px;color:var(--text-muted)">Total utilisateurs</div></div>
         </div>
@@ -4155,9 +4161,6 @@ const App = {
             oninput="App.renderUtilisateurs(this.value)"
             style="width:100%;padding:9px 12px 9px 34px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface)">
         </div>
-        <button class="btn btn-${onlyNeverLogged?'primary':'ghost'} btn-sm" onclick="App.renderUtilisateurs(undefined,${!onlyNeverLogged})">
-          ⚫ Jamais connectés${neverCount>0?' ('+neverCount+')':''}
-        </button>
         ${countLabel}
       </div>
       <div class="card" style="padding:0;overflow:hidden">
