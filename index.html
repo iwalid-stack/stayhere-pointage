@@ -1870,16 +1870,22 @@ const App = {
         }
       })
       .on('postgres_changes',{event:'UPDATE',schema:'public',table:'sh_users'}, async (payload)=>{
-        // Refresh users cache
-        const {data}=await SB.from('sh_users').select('*');
-        Cache.users=data||[];
-        // If IT'S the current user who was updated → rebuild entire app with new permissions
+        // Mise à jour ciblée du cache (évite de recharger tous les users)
+        if(payload.new && payload.new.id) {
+          const idx=Cache.users.findIndex(u=>u.id===payload.new.id);
+          if(idx!==-1) Cache.users[idx]={...Cache.users[idx],...payload.new};
+          else Cache.users.push(payload.new);
+        }
+        // Si c'est l'utilisateur courant → reconstruire l'app (changement de rôle/droits)
         if(payload.new && payload.new.id===currentSession?.id) {
-          currentSession=payload.new;
-          localStorage.setItem('sh_session',JSON.stringify(payload.new));
+          currentSession={...currentSession,...payload.new};
+          localStorage.setItem('sh_session',JSON.stringify(currentSession));
           this.showApp();
           this.setupRealtime();
+          return;
         }
+        // Rafraîchir la page utilisateurs si elle est ouverte
+        if(this.currentPage==='utilisateurs') this.renderUtilisateurs();
       })
       .on('postgres_changes',{event:'*',schema:'public',table:'sh_employees'}, async ()=>{
         const {data}=await SB.from('sh_employees').select('*');
