@@ -31,7 +31,7 @@
   --mise_a_pied:#880e4f; --mise_a_pied-bg:#fce4ec;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
+body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
 
 /* CONFIG / LOADING */
 .setup-page{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,var(--primary) 0%,#3a3a34 100%)}
@@ -59,7 +59,8 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 /* APP */
 #app{display:flex;min-height:100vh}
 .sidebar{width:240px;background:var(--primary);color:white;display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;bottom:0;overflow-y:auto;z-index:100}
-.sidebar-logo{padding:24px 20px 16px;border-bottom:1px solid rgba(255,255,255,0.08)}
+.sidebar-logo{padding:20px 20px 14px;border-bottom:1px solid rgba(255,255,255,0.08);transition:opacity .15s}
+.sidebar-logo:hover{opacity:.85}
 .sidebar-logo h2{font-size:18px;font-weight:700;color:white}
 .sidebar-logo p{font-size:11px;color:rgba(255,255,255,0.5);margin-top:2px}
 .sidebar-user{padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.08);font-size:12px}
@@ -1618,7 +1619,7 @@ function _initSessionWatcher() {
 }
 
 const App = {
-  currentPage:'planning', currentSite:null,
+  currentPage:'home', currentSite:null,
   currentYear:new Date().getFullYear(), currentMonth:new Date().getMonth(),
   _synthView:'site', _synthSearch:'',
   _saisieType:null,
@@ -1775,33 +1776,47 @@ const App = {
     <div id="sidebar-overlay" class="sidebar-overlay" onclick="App.toggleSidebar()"></div>
     <div id="app">
       <aside class="sidebar" id="main-sidebar">
-        <div class="sidebar-logo">
-          <h2><span class="logo-circle">●</span> StayHere <span class="logo-triangle">▲</span></h2>
-          <p>Gestion du Pointage</p>
+        <div class="sidebar-logo" onclick="App.navigate('home')" style="cursor:pointer">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 501 90" style="width:160px;height:auto;display:block;margin-bottom:4px">
+            <g fill="#F6F7EA">
+              <path d="M201.9,21.8L216.4,63l14.9-41.3h8L219.1,75c-4.1,10.7-6.8,14.2-15.5,14.2h-5.7v-6.4h4c5.6,0,7.3-1.1,10.7-10.4l-19.1-50.6H201.9z"/>
+              <path d="M166.4,73.5c-9.8,0-17.7-5.6-17.7-15.4c0-10.4,8-13,20.7-16.5c8-2.2,13.5-3.3,13.5-7.7c0-4-4-7.1-11.5-7.1S159,30,158.4,36.5h-8c1.3-9,8.7-15.7,21.1-15.7c12.1,0,19.2,5.5,19.2,15.2v36.4h-7.4v-9.4C181.4,68.8,175.9,73.5,166.4,73.5z M168.1,67.6c9.7,0,15.2-8.3,15.2-17.6V40c-1.4,3.2-5.3,4.9-11.7,6.6c-8.7,2.4-14.5,4.8-14.5,11.5C157.1,64.3,161.8,67.6,168.1,67.6z"/>
+              <path d="M146.9,28.1h-11.1v31.4c0,5,0.7,6.4,5.1,6.4h6v6.3h-8c-8.6,0-10.8-4-10.8-12.3V28.1h-7.9v-6.3h7.9V8.3h7.7v13.5h11.1V28.1z"/>
+              <path d="M450.2,47.1c0-5,1.1-9.5,3.2-13.5c2.2-4,5.2-7.1,9-9.3c3.9-2.3,8.4-3.5,13.5-3.5c5.2,0,9.7,1.3,13.5,3.8c3.9,2.5,6.8,6,8.8,10.4c2,4.4,3,9.3,2.8,14.9h-37.9c0.3,4.6,1.5,8.3,3.8,10.9c2.3,2.6,5.4,3.9,9.3,3.9c3,0,5.4-0.8,7.2-2.3c1.9-1.5,3.2-3.5,4.1-6H500c-1.5,5.2-4.3,9.3-8.4,12.5c-4.1,3.2-9.3,4.8-15.5,4.8c-5.1,0-9.6-1.1-13.5-3.4c-3.9-2.3-6.9-5.5-9.1-9.5C451.3,56.6,450.2,52.1,450.2,47.1z M488.3,42c-0.6-3.8-2-6.8-4.2-9c-2.1-2.2-4.9-3.4-8.2-3.4c-3.4,0-6.2,1.1-8.4,3.4c-2.1,2.2-3.4,5.2-4,9H488.3z"/>
+              <path d="M451.5,21.8v11.3h-4.9c-4.4,0-7.7,1-9.8,3.1c-2.1,2-3.2,5.6-3.3,10.5v25.7h-12.5V21.8h12.2v9.4c1.1-2.8,2.8-5,5.3-6.7c2.5-1.8,5.7-2.7,9.5-2.7H451.5z"/>
+              <path d="M365.9,47.1c0-5,1.1-9.5,3.2-13.5c2.2-4,5.2-7.1,9-9.3c3.9-2.3,8.4-3.5,13.5-3.5c5.2,0,9.7,1.3,13.5,3.8c3.9,2.5,6.8,6,8.8,10.4c2.1,4.4,3,9.3,2.8,14.9h-37.9c0.3,4.6,1.5,8.3,3.8,10.9c2.3,2.6,5.4,3.9,9.3,3.9c3,0,5.4-0.8,7.2-2.3c1.9-1.5,3.2-3.5,4.1-6h12.5c-1.5,5.2-4.3,9.3-8.4,12.5c-4.1,3.2-9.3,4.8-15.5,4.8c-5.1,0-9.6-1.1-13.5-3.4c-3.9-2.3-6.9-5.5-9.1-9.5C367,56.6,365.9,52.1,365.9,47.1z M404,42c-0.6-3.8-2-6.8-4.2-9c-2.1-2.2-4.9-3.4-8.2-3.4c-3.4,0-6.2,1.1-8.4,3.4c-2.1,2.2-3.4,5.2-4,9H404z"/>
+              <path d="M75,33.8c3.6,1.8,7.9,3,12.5,4.3c0.4,0.1,0.8,0.2,1.2,0.4c1.4,0.4,2.7,0.8,4,1.1C103.2,42.5,110,44.4,110,53c0,8.7-7,13-17,13c-12,0-19.2-4.3-21.1-14.5c-1.4,3.4-3.3,6.5-5.6,9.3c4.4,7.7,13,12.7,26.4,12.7c15.1,0,25.9-7.7,25.9-20.5c0-14.4-11.8-17.7-25-21.3c-0.4-0.1-0.8-0.2-1.2-0.3c-0.2,0-0.3-0.1-0.5-0.1C81.6,28.5,74.1,26.4,74.1,19c0-6.7,6.5-10.7,15.8-10.7c10.5,0,17.9,3.9,19.3,12.9h8.3c-2-12.1-11.1-20.4-27.7-20.4c-10.7,0-19.3,4.4-22.8,11.4C71.7,18.2,74.5,25.7,75,33.8z"/>
+              <path d="M303.4,43.2l12.7-7.3l-12.7-7.3V1.9H317V30h30.3V1.9h13.6v70.4h-13.6V41.8H317v30.5h-13.6V43.2z"/>
+            </g>
+            <circle fill="#008160" cx="35.4" cy="36" r="35.1"/>
+            <path fill="#FF622C" d="M306.8,35.9l-60.7,35v-70L306.8,35.9z"/>
+          </svg>
+          <p style="font-size:10px;color:rgba(255,255,255,0.45);letter-spacing:0.5px;text-transform:uppercase">Gestion du Pointage</p>
         </div>
         <div class="sidebar-user">
           <div class="user-name">${currentSession.nom}</div>
           <div class="user-role">${ROLES[currentSession.role]||currentSession.role}</div>
         </div>
         <nav>
+          <div class="nav-item ${this.currentPage==='home'?'active':''}" onclick="App.navigate('home')" style="padding:12px 20px;font-size:14px;font-weight:600;letter-spacing:0.1px"><span class="icon">🏠</span> Accueil</div>
           <div class="nav-section">Pointage</div>
-          <div class="nav-item active" onclick="App.navigate('pointage')"><span class="icon">📅</span> Saisie du pointage</div>
-          ${(this.canVoirEquipe()||this.canVoirEquipeTerrain()||this.canGlobal())?`<div class="nav-item" onclick="App.navigate('shifts')"><span class="icon">⏱</span> Pointage horaire</div>`:''}
-          ${this.canSaisirPlanning()?`<div class="nav-item" onclick="App.navigate('planning')"><span class="icon">📋</span> Planning semaine</div>`:''}
-          ${this.canGererRotation()?`<div class="nav-item" onclick="App.navigate('rotation')"><span class="icon">🔄</span> Shifts rotatifs</div>`:''}
-          ${this.canGlobal()?`<div class="nav-item" onclick="App.navigate('synthese')"><span class="icon">📊</span> Synthèse globale</div>`:''}
-          ${this.canValidate()?`<div class="nav-item" onclick="App.navigate('validation')"><span class="icon">✅</span> Validation</div>`:''}
-          ${(this.canValidate()||this.canManage())?`<div class="nav-item" onclick="App.navigate('conges')"><span class="icon">🏖</span> Congés & RECUP</div>`:''}
+          <div class="nav-item ${this.currentPage==='pointage'?'active':''}" onclick="App.navigate('pointage')"><span class="icon">📅</span> Saisie du pointage</div>
+          ${(this.canVoirEquipe()||this.canVoirEquipeTerrain()||this.canGlobal())?`<div class="nav-item ${this.currentPage==='shifts'?'active':''}" onclick="App.navigate('shifts')"><span class="icon">⏱</span> Pointage horaire</div>`:''}
+          ${this.canSaisirPlanning()?`<div class="nav-item ${this.currentPage==='planning'?'active':''}" onclick="App.navigate('planning')"><span class="icon">📋</span> Planning semaine</div>`:''}
+          ${this.canGererRotation()?`<div class="nav-item ${this.currentPage==='rotation'?'active':''}" onclick="App.navigate('rotation')"><span class="icon">🔄</span> Shifts rotatifs</div>`:''}
+          ${this.canGlobal()?`<div class="nav-item ${this.currentPage==='synthese'?'active':''}" onclick="App.navigate('synthese')"><span class="icon">📊</span> Synthèse globale</div>`:''}
+          ${this.canValidate()?`<div class="nav-item ${this.currentPage==='validation'?'active':''}" onclick="App.navigate('validation')"><span class="icon">✅</span> Validation</div>`:''}
+          ${(this.canValidate()||this.canManage())?`<div class="nav-item ${this.currentPage==='conges'?'active':''}" onclick="App.navigate('conges')"><span class="icon">🏖</span> Congés & RECUP</div>`:''}
           ${this.canManage()?`
           <div class="nav-section">Administration</div>
-          <div class="nav-item" onclick="App.navigate('collaborateurs')"><span class="icon">👥</span> Collaborateurs</div>
-          <div class="nav-item" onclick="App.navigate('sites')"><span class="icon">🏠</span> Sites</div>
-          <div class="nav-item" onclick="App.navigate('feries')"><span class="icon">🎌</span> Jours fériés</div>
-          <div class="nav-item" onclick="App.navigate('utilisateurs')"><span class="icon">🔐</span> Utilisateurs</div>
-          <div class="nav-item" onclick="App.navigate('parametres')"><span class="icon">⚙️</span> Paramètres</div>
+          <div class="nav-item ${this.currentPage==='collaborateurs'?'active':''}" onclick="App.navigate('collaborateurs')"><span class="icon">👥</span> Collaborateurs</div>
+          <div class="nav-item ${this.currentPage==='sites'?'active':''}" onclick="App.navigate('sites')"><span class="icon">🏡</span> Sites</div>
+          <div class="nav-item ${this.currentPage==='feries'?'active':''}" onclick="App.navigate('feries')"><span class="icon">🎌</span> Jours fériés</div>
+          <div class="nav-item ${this.currentPage==='utilisateurs'?'active':''}" onclick="App.navigate('utilisateurs')"><span class="icon">🔐</span> Utilisateurs</div>
+          <div class="nav-item ${this.currentPage==='parametres'?'active':''}" onclick="App.navigate('parametres')"><span class="icon">⚙️</span> Paramètres</div>
           <div class="nav-section">Contrôle</div>
-          <div class="nav-item" onclick="App.navigate('audit')"><span class="icon">📋</span> Historique</div>`:''}
-          ${this.canLock()?`<div class="nav-item" onclick="App.navigate('verrous')"><span class="icon">🔒</span> Verrous</div>`:''}
+          <div class="nav-item ${this.currentPage==='audit'?'active':''}" onclick="App.navigate('audit')"><span class="icon">📋</span> Historique</div>`:''}
+          ${this.canLock()?`<div class="nav-item ${this.currentPage==='verrous'?'active':''}" onclick="App.navigate('verrous')"><span class="icon">🔒</span> Verrous</div>`:''}
         </nav>
         <div class="nav-section">Accès rapide</div>
         <div class="nav-item" onclick="window.open('clock.html','_blank')"><span class="icon">📱</span> App Pointage Mobile</div>
@@ -1811,7 +1826,7 @@ const App = {
         <div class="topbar">
           <div style="display:flex;align-items:center;gap:10px">
             <button class="hamburger" onclick="App.toggleSidebar()" aria-label="Menu">☰</button>
-            <h2 id="page-title">Pointage</h2>
+            <h2 id="page-title">Tableau de bord</h2>
           </div>
           <div class="topbar-actions">
             <span id="sync-status" class="sync-badge sync-ok">● En ligne</span>
@@ -1836,6 +1851,7 @@ const App = {
         if(this.currentPage==='pointage') this.renderPointage();
         if(this.currentPage==='validation') this.renderValidation();
         if(this.currentPage==='planning') this.renderPlanning();
+        if(this.currentPage==='home') this.renderHome();
       })
       .on('postgres_changes',{event:'*',schema:'public',table:'sh_locks'}, async ()=>{
         const {data}=await SB.from('sh_locks').select('*');
@@ -1883,12 +1899,14 @@ const App = {
           if(idx!==-1) Cache.users[idx]={...Cache.users[idx],...payload.new};
           else Cache.users.push(payload.new);
         }
-        // Si c'est l'utilisateur courant → reconstruire l'app (changement de rôle/droits)
+        // Si c'est l'utilisateur courant → mettre à jour la session
         if(payload.new && payload.new.id===currentSession?.id) {
+          const roleChanged=payload.new.role && payload.new.role!==currentSession.role;
           currentSession={...currentSession,...payload.new};
           localStorage.setItem('sh_session',JSON.stringify(currentSession));
-          this.showApp();
-          this.setupRealtime();
+          if(roleChanged) { this.showApp(); this.setupRealtime(); return; }
+          // Pas de changement de rôle : juste re-render la page courante sans rebuild DOM
+          this.renderPage();
           return;
         }
         // Rafraîchir la page utilisateurs si elle est ouverte
@@ -2019,8 +2037,33 @@ const App = {
     // Réinitialiser les recherches quand on change de page
     if(page!==this.currentPage) { this._collabSearch=''; this._userSearch=''; }
     this.currentPage=page;
-    document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
-    event?.target?.closest('.nav-item')?.classList.add('active');
+    // Re-render nav to reflect active state (template-driven, no DOM hacking)
+    const nav=document.querySelector('.sidebar nav');
+    if(nav) {
+      const isKA=currentSession.role==='kindness_ambassador';
+      const isGov=['gouvernante_generale','assistante_gouvernante'].includes(currentSession.role);
+      nav.innerHTML=`
+        <div class="nav-item ${this.currentPage==='home'?'active':''}" onclick="App.navigate('home')" style="padding:12px 20px;font-size:14px;font-weight:600;letter-spacing:0.1px"><span class="icon">🏠</span> Accueil</div>
+        <div class="nav-section">Pointage</div>
+        <div class="nav-item ${this.currentPage==='pointage'?'active':''}" onclick="App.navigate('pointage')"><span class="icon">📅</span> Saisie du pointage</div>
+        ${(this.canVoirEquipe()||this.canVoirEquipeTerrain()||this.canGlobal())?`<div class="nav-item ${this.currentPage==='shifts'?'active':''}" onclick="App.navigate('shifts')"><span class="icon">⏱</span> Pointage horaire</div>`:''}
+        ${this.canSaisirPlanning()?`<div class="nav-item ${this.currentPage==='planning'?'active':''}" onclick="App.navigate('planning')"><span class="icon">📋</span> Planning semaine</div>`:''}
+        ${this.canGererRotation()?`<div class="nav-item ${this.currentPage==='rotation'?'active':''}" onclick="App.navigate('rotation')"><span class="icon">🔄</span> Shifts rotatifs</div>`:''}
+        ${this.canGlobal()?`<div class="nav-item ${this.currentPage==='synthese'?'active':''}" onclick="App.navigate('synthese')"><span class="icon">📊</span> Synthèse globale</div>`:''}
+        ${this.canValidate()?`<div class="nav-item ${this.currentPage==='validation'?'active':''}" onclick="App.navigate('validation')"><span class="icon">✅</span> Validation</div>`:''}
+        ${(this.canValidate()||this.canManage())?`<div class="nav-item ${this.currentPage==='conges'?'active':''}" onclick="App.navigate('conges')"><span class="icon">🏖</span> Congés & RECUP</div>`:''}
+        ${this.canManage()?`
+        <div class="nav-section">Administration</div>
+        <div class="nav-item ${this.currentPage==='collaborateurs'?'active':''}" onclick="App.navigate('collaborateurs')"><span class="icon">👥</span> Collaborateurs</div>
+        <div class="nav-item ${this.currentPage==='sites'?'active':''}" onclick="App.navigate('sites')"><span class="icon">🏡</span> Sites</div>
+        <div class="nav-item ${this.currentPage==='feries'?'active':''}" onclick="App.navigate('feries')"><span class="icon">🎌</span> Jours fériés</div>
+        <div class="nav-item ${this.currentPage==='utilisateurs'?'active':''}" onclick="App.navigate('utilisateurs')"><span class="icon">🔐</span> Utilisateurs</div>
+        <div class="nav-item ${this.currentPage==='parametres'?'active':''}" onclick="App.navigate('parametres')"><span class="icon">⚙️</span> Paramètres</div>
+        <div class="nav-section">Contrôle</div>
+        <div class="nav-item ${this.currentPage==='audit'?'active':''}" onclick="App.navigate('audit')"><span class="icon">📋</span> Historique</div>`:''}
+        ${this.canLock()?`<div class="nav-item ${this.currentPage==='verrous'?'active':''}" onclick="App.navigate('verrous')"><span class="icon">🔒</span> Verrous</div>`:''}
+      `;
+    }
     // Close sidebar on mobile after navigation
     const sidebar=document.getElementById('main-sidebar');
     const overlay=document.getElementById('sidebar-overlay');
@@ -2029,12 +2072,163 @@ const App = {
   },
 
   renderPage() {
-    const titles={pointage:'Saisie du pointage',shifts:'Pointage horaire',planning:'Planning semaine',rotation:'Shifts rotatifs',synthese:'Synthèse globale',validation:'Validation',conges:'Congés & RECUP',collaborateurs:'Collaborateurs',sites:'Sites',feries:'Jours fériés',utilisateurs:'Utilisateurs',parametres:'Paramètres',audit:'Historique des modifications',verrous:'Verrous de période'};
+    const titles={home:'Tableau de bord',pointage:'Saisie du pointage',shifts:'Pointage horaire',planning:'Planning semaine',rotation:'Shifts rotatifs',synthese:'Synthèse globale',validation:'Validation',conges:'Congés & RECUP',collaborateurs:'Collaborateurs',sites:'Sites',feries:'Jours fériés',utilisateurs:'Utilisateurs',parametres:'Paramètres',audit:'Historique des modifications',verrous:'Verrous de période'};
     const titleEl=document.getElementById('page-title');
     if(titleEl) titleEl.textContent=titles[this.currentPage]||'';
     const extra=document.getElementById('topbar-extra');
     if(extra) extra.innerHTML='';
-    ({pointage:()=>this.renderPointage(),shifts:()=>this.renderShifts(),planning:()=>this.renderPlanning(),rotation:()=>this.renderRotation(),synthese:()=>this.renderSynthese(),validation:()=>this.renderValidation(),conges:()=>this.renderConges(),collaborateurs:()=>this.renderCollaborateurs(),sites:()=>this.renderSites(),feries:()=>this.renderFeries(),utilisateurs:()=>this.renderUtilisateurs(),parametres:()=>this.renderParametres(),audit:()=>this.renderAudit(),verrous:()=>this.renderVerrous()})[this.currentPage]?.();
+    ({home:()=>this.renderHome(),pointage:()=>this.renderPointage(),shifts:()=>this.renderShifts(),planning:()=>this.renderPlanning(),rotation:()=>this.renderRotation(),synthese:()=>this.renderSynthese(),validation:()=>this.renderValidation(),conges:()=>this.renderConges(),collaborateurs:()=>this.renderCollaborateurs(),sites:()=>this.renderSites(),feries:()=>this.renderFeries(),utilisateurs:()=>this.renderUtilisateurs(),parametres:()=>this.renderParametres(),audit:()=>this.renderAudit(),verrous:()=>this.renderVerrous()})[this.currentPage]?.();
+  },
+
+  // ---- ACCUEIL ----
+  renderHome() {
+    const pc=document.getElementById('page-content');
+    if(!pc) return;
+    const today=todayStr();
+    const todayFmt=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    const hour=new Date().getHours();
+    const greeting=hour<12?'Bonjour':'Bonsoir';
+    const prenom=(currentSession.nom||'').split(' ')[0]||currentSession.nom;
+
+    // ---- Stats du jour ----
+    const sites=DB.getSites().filter(s=>s.actif);
+    const allEmps=DB.getEmployees().filter(e=>e.actif);
+
+    // Pointage du jour (tous sites)
+    const todayEntries=[];
+    for(const s of sites){
+      const ym=today.substring(0,7);
+      const [y,m]=ym.split('-').map(Number);
+      const rows=DB.getPointage(s.id,y,m);
+      for(const row of rows){
+        const v=row[today];
+        if(v) todayEntries.push({siteId:s.id,empId:row.employee_id,type:v});
+      }
+    }
+    const travCount=todayEntries.filter(e=>e.type==='T').length;
+    const absCount=todayEntries.filter(e=>['A','M','AM'].includes(e.type)).length;
+
+    // Shifts en cours
+    const nowTs=Date.now();
+    const activeShifts=(Cache.shifts||[]).filter(sh=>{
+      if(!sh.clock_in||sh.clock_out) return false;
+      const inTs=new Date(sh.clock_in).getTime();
+      return nowTs-inTs<14*3600*1000;
+    });
+
+    // Validations en attente (demandes de modification de shift)
+    const pendingValidations=(Cache.shiftChangeRequests||[]).filter(p=>p.status==='pending').length;
+
+    // Congés en attente
+    const pendingLeaves=(Cache.leaveRequests||[]).filter(r=>r.status==='pending').length;
+
+    // Connexions utilisateurs
+    const users=Cache.users||[];
+    const connectedUsers=users.filter(u=>u.first_login_at).length;
+
+    // Quick links selon rôle
+    const quickLinks=[];
+    quickLinks.push({icon:'📅',label:'Saisie pointage',page:'pointage',color:'var(--accent)'});
+    if(this.canVoirEquipe()||this.canVoirEquipeTerrain()||this.canGlobal())
+      quickLinks.push({icon:'⏱',label:'Pointage horaire',page:'shifts',color:'var(--accent-green)'});
+    if(this.canValidate())
+      quickLinks.push({icon:'✅',label:'Validation',page:'validation',color:'#9E6EFF'});
+    if(this.canManage())
+      quickLinks.push({icon:'👥',label:'Collaborateurs',page:'collaborateurs',color:'#0277bd'});
+    if(this.canManage())
+      quickLinks.push({icon:'🔐',label:'Utilisateurs',page:'utilisateurs',color:'#c07000'});
+    if(this.canValidate()||this.canManage())
+      quickLinks.push({icon:'🏖',label:'Congés & RECUP',page:'conges',color:'#558b2f'});
+
+    // Alerte validations
+    const alerts=[];
+    if(pendingValidations>0) alerts.push({color:'var(--accent)',icon:'⚠️',text:`${pendingValidations} saisie${pendingValidations>1?'s':''} en attente de validation`});
+    if(pendingLeaves>0) alerts.push({color:'var(--accent-green)',icon:'🏖',text:`${pendingLeaves} demande${pendingLeaves>1?'s':''} de congé en attente`});
+
+    pc.innerHTML=`
+    <div style="max-width:900px">
+      <!-- Greeting -->
+      <div style="margin-bottom:28px">
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:4px">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 501 90" style="height:28px;width:auto">
+            <g fill="#272724">
+              <path d="M201.9,21.8L216.4,63l14.9-41.3h8L219.1,75c-4.1,10.7-6.8,14.2-15.5,14.2h-5.7v-6.4h4c5.6,0,7.3-1.1,10.7-10.4l-19.1-50.6H201.9z"/>
+              <path d="M166.4,73.5c-9.8,0-17.7-5.6-17.7-15.4c0-10.4,8-13,20.7-16.5c8-2.2,13.5-3.3,13.5-7.7c0-4-4-7.1-11.5-7.1S159,30,158.4,36.5h-8c1.3-9,8.7-15.7,21.1-15.7c12.1,0,19.2,5.5,19.2,15.2v36.4h-7.4v-9.4C181.4,68.8,175.9,73.5,166.4,73.5z M168.1,67.6c9.7,0,15.2-8.3,15.2-17.6V40c-1.4,3.2-5.3,4.9-11.7,6.6c-8.7,2.4-14.5,4.8-14.5,11.5C157.1,64.3,161.8,67.6,168.1,67.6z"/>
+              <path d="M146.9,28.1h-11.1v31.4c0,5,0.7,6.4,5.1,6.4h6v6.3h-8c-8.6,0-10.8-4-10.8-12.3V28.1h-7.9v-6.3h7.9V8.3h7.7v13.5h11.1V28.1z"/>
+              <path d="M450.2,47.1c0-5,1.1-9.5,3.2-13.5c2.2-4,5.2-7.1,9-9.3c3.9-2.3,8.4-3.5,13.5-3.5c5.2,0,9.7,1.3,13.5,3.8c3.9,2.5,6.8,6,8.8,10.4c2,4.4,3,9.3,2.8,14.9h-37.9c0.3,4.6,1.5,8.3,3.8,10.9c2.3,2.6,5.4,3.9,9.3,3.9c3,0,5.4-0.8,7.2-2.3c1.9-1.5,3.2-3.5,4.1-6H500c-1.5,5.2-4.3,9.3-8.4,12.5c-4.1,3.2-9.3,4.8-15.5,4.8c-5.1,0-9.6-1.1-13.5-3.4c-3.9-2.3-6.9-5.5-9.1-9.5C451.3,56.6,450.2,52.1,450.2,47.1z M488.3,42c-0.6-3.8-2-6.8-4.2-9c-2.1-2.2-4.9-3.4-8.2-3.4c-3.4,0-6.2,1.1-8.4,3.4c-2.1,2.2-3.4,5.2-4,9H488.3z"/>
+              <path d="M451.5,21.8v11.3h-4.9c-4.4,0-7.7,1-9.8,3.1c-2.1,2-3.2,5.6-3.3,10.5v25.7h-12.5V21.8h12.2v9.4c1.1-2.8,2.8-5,5.3-6.7c2.5-1.8,5.7-2.7,9.5-2.7H451.5z"/>
+              <path d="M365.9,47.1c0-5,1.1-9.5,3.2-13.5c2.2-4,5.2-7.1,9-9.3c3.9-2.3,8.4-3.5,13.5-3.5c5.2,0,9.7,1.3,13.5,3.8c3.9,2.5,6.8,6,8.8,10.4c2.1,4.4,3,9.3,2.8,14.9h-37.9c0.3,4.6,1.5,8.3,3.8,10.9c2.3,2.6,5.4,3.9,9.3,3.9c3,0,5.4-0.8,7.2-2.3c1.9-1.5,3.2-3.5,4.1-6h12.5c-1.5,5.2-4.3,9.3-8.4,12.5c-4.1,3.2-9.3,4.8-15.5,4.8c-5.1,0-9.6-1.1-13.5-3.4c-3.9-2.3-6.9-5.5-9.1-9.5C367,56.6,365.9,52.1,365.9,47.1z M404,42c-0.6-3.8-2-6.8-4.2-9c-2.1-2.2-4.9-3.4-8.2-3.4c-3.4,0-6.2,1.1-8.4,3.4c-2.1,2.2-3.4,5.2-4,9H404z"/>
+              <path d="M75,33.8c3.6,1.8,7.9,3,12.5,4.3c0.4,0.1,0.8,0.2,1.2,0.4c1.4,0.4,2.7,0.8,4,1.1C103.2,42.5,110,44.4,110,53c0,8.7-7,13-17,13c-12,0-19.2-4.3-21.1-14.5c-1.4,3.4-3.3,6.5-5.6,9.3c4.4,7.7,13,12.7,26.4,12.7c15.1,0,25.9-7.7,25.9-20.5c0-14.4-11.8-17.7-25-21.3c-0.4-0.1-0.8-0.2-1.2-0.3c-0.2,0-0.3-0.1-0.5-0.1C81.6,28.5,74.1,26.4,74.1,19c0-6.7,6.5-10.7,15.8-10.7c10.5,0,17.9,3.9,19.3,12.9h8.3c-2-12.1-11.1-20.4-27.7-20.4c-10.7,0-19.3,4.4-22.8,11.4C71.7,18.2,74.5,25.7,75,33.8z"/>
+              <path d="M303.4,43.2l12.7-7.3l-12.7-7.3V1.9H317V30h30.3V1.9h13.6v70.4h-13.6V41.8H317v30.5h-13.6V43.2z"/>
+            </g>
+            <circle fill="#008160" cx="35.4" cy="36" r="35.1"/>
+            <path fill="#FF622C" d="M306.8,35.9l-60.7,35v-70L306.8,35.9z"/>
+          </svg>
+        </div>
+        <h1 style="font-size:26px;font-weight:700;color:var(--text);margin-bottom:2px">${greeting}, ${prenom} 👋</h1>
+        <p style="color:var(--text-muted);font-size:14px;text-transform:capitalize">${todayFmt}</p>
+      </div>
+
+      <!-- Alertes -->
+      ${alerts.length?`<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px">${alerts.map(a=>`
+        <div style="display:flex;align-items:center;gap:10px;background:${a.color}18;border:1px solid ${a.color}44;border-radius:10px;padding:10px 16px">
+          <span style="font-size:16px">${a.icon}</span>
+          <span style="font-size:13px;font-weight:600;color:var(--text)">${a.text}</span>
+        </div>`).join('')}</div>`:''}
+
+      <!-- Stats du jour -->
+      <div style="margin-bottom:28px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:12px">Aujourd'hui</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px">
+          <div style="background:var(--surface);border-radius:12px;padding:16px;border:1px solid var(--border)">
+            <div style="font-size:28px;font-weight:800;color:var(--accent-green)">${travCount}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Présents</div>
+          </div>
+          <div style="background:var(--surface);border-radius:12px;padding:16px;border:1px solid var(--border)">
+            <div style="font-size:28px;font-weight:800;color:var(--accent)">${absCount}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Absents / Malades</div>
+          </div>
+          <div style="background:var(--surface);border-radius:12px;padding:16px;border:1px solid var(--border)">
+            <div style="font-size:28px;font-weight:800;color:#0277bd">${activeShifts.length}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Shifts actifs</div>
+          </div>
+          ${this.canManage()?`<div style="background:var(--surface);border-radius:12px;padding:16px;border:1px solid var(--border)">
+            <div style="font-size:28px;font-weight:800;color:#9E6EFF">${connectedUsers}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Utilisateurs connectés</div>
+          </div>`:''}
+        </div>
+      </div>
+
+      <!-- Sites actifs (si vue globale) -->
+      ${this.canGlobal()?`<div style="margin-bottom:28px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:12px">Sites actifs</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
+          ${sites.map(s=>{
+            const siteTodayEmps=allEmps.filter(e=>DB.getEffectiveSiteId(e.id,today)===s.id&&e.actif);
+            const sitePointage=DB.getPointage(s.id,new Date().getFullYear(),new Date().getMonth()+1);
+            const sitePresent=sitePointage.filter(r=>r[today]==='T').length;
+            return `<div onclick="App.changeSite('${s.id}');App.navigate('pointage')" style="cursor:pointer;background:var(--surface);border-radius:10px;padding:14px;border:1px solid var(--border);transition:border-color .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+              <div style="font-weight:700;font-size:13px;color:var(--text);margin-bottom:4px">${s.nom}</div>
+              <div style="font-size:12px;color:var(--text-muted)"><span style="color:var(--accent-green);font-weight:700">${sitePresent}</span> présents · ${siteTodayEmps.length} total</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`:''}
+
+      <!-- Accès rapides -->
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:12px">Accès rapides</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px">
+          ${quickLinks.map(l=>`
+            <button onclick="App.navigate('${l.page}')" style="display:flex;align-items:center;gap:8px;padding:10px 18px;background:var(--surface);border:1px solid var(--border);border-radius:20px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text);font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='${l.color}';this.style.color='${l.color}'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text)'">
+              <span>${l.icon}</span> ${l.label}
+            </button>`).join('')}
+          <button onclick="window.open('clock.html','_blank')" style="display:flex;align-items:center;gap:8px;padding:10px 18px;background:var(--primary);border:none;border-radius:20px;cursor:pointer;font-size:13px;font-weight:600;color:white;font-family:inherit;transition:opacity .15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+            <span>📱</span> App Mobile
+          </button>
+        </div>
+      </div>
+    </div>`;
   },
 
   // ---- POINTAGE ----
