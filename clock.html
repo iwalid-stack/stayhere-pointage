@@ -214,6 +214,21 @@ function slugify(s) {
 }
 
 // ================================================================
+// LOGIN TRACKING — enregistre first_login_at / last_login_at
+// ================================================================
+function _trackLogin(username) {
+  if(!username) return;
+  const now = new Date().toISOString();
+  // On vérifie d'abord si first_login_at est déjà rempli
+  SB.from('sh_users').select('first_login_at').eq('username', username).single()
+    .then(({data}) => {
+      const upd = { last_login_at: now };
+      if(!data?.first_login_at) upd.first_login_at = now;
+      SB.from('sh_users').update(upd).eq('username', username).then(()=>{});
+    });
+}
+
+// ================================================================
 // PAUSE STATE (stockée dans localStorage pour persistance)
 // ================================================================
 function getPause() {
@@ -368,6 +383,7 @@ const ClockApp = {
         const { data: profile } = await SB.from('sh_user_profiles').select('*').eq('id', sbSession.user.id).single();
         if (profile?.acces_horloge) {
           session = { ...profile, _sbSession: sbSession };
+          _trackLogin(profile.username);
         }
       } catch { session = null; }
     }
@@ -476,6 +492,7 @@ const ClockApp = {
       }
 
       session = { ...profile };
+      _trackLogin(profile.username);
       await this.loadData(false);
     } catch(e) {
       if(errEl){errEl.textContent='Erreur de connexion : '+e.message;errEl.style.display='block';}
