@@ -1738,6 +1738,12 @@ const App = {
         }
 
         currentSession = { ...profile };
+        // Enregistrer first_login_at / last_login_at
+        const _now = new Date().toISOString();
+        const _loginUpd = { last_login_at: _now };
+        if (!currentSession.first_login_at) _loginUpd.first_login_at = _now;
+        Object.assign(currentSession, _loginUpd);
+        SB.from('sh_users').update(_loginUpd).eq('username', currentSession.username).then(()=>{});
         await loadAll();
         this.showApp();
         this.setupRealtime();
@@ -4050,17 +4056,39 @@ const App = {
 
   // ---- UTILISATEURS ----
   _userSearch: '',
-  renderUtilisateurs(search){
+  renderUtilisateurs(search, filterNeverLogged=null){
     if(search!==undefined) this._userSearch=search;
+    if(filterNeverLogged!==null) this._userFilterNeverLogged=filterNeverLogged;
     const q=(this._userSearch||'').toLowerCase().trim();
+    const onlyNeverLogged=this._userFilterNeverLogged||false;
     const extra=document.getElementById('topbar-extra');
     if(extra) extra.innerHTML=`<button class="btn btn-primary btn-sm" onclick="App.openAddUser()">+ Nouvel utilisateur</button>`;
     const getRoleLabel=role=>{const r=DB.getRoleById(role);return r?r.nom:(ROLES[role]||role);};
     const all=DB.getUsers();
-    const filtered=q?all.filter(u=>{
+    const neverCount=all.filter(u=>!u.first_login_at).length;
+    const connectedCount=all.length-neverCount;
+    let filtered=q?all.filter(u=>{
       const site=u.site_id?DB.getSiteById(u.site_id):null;
       return `${u.username} ${u.nom} ${getRoleLabel(u.role)} ${site?.nom||''}`.toLowerCase().includes(q);
     }):all;
+    if(onlyNeverLogged) filtered=filtered.filter(u=>!u.first_login_at);
+    // Tri : jamais connectés en premier, puis par last_login_at décroissant
+    filtered=[...filtered].sort((a,b)=>{
+      if(!a.first_login_at&&b.first_login_at) return -1;
+      if(a.first_login_at&&!b.first_login_at) return 1;
+      return (b.last_login_at||'').localeCompare(a.last_login_at||'');
+    });
+    const fmtLogin=iso=>{
+      if(!iso) return '<span style="color:var(--text-muted);font-size:11px">—</span>';
+      const d=new Date(iso);
+      const today=new Date(); today.setHours(0,0,0,0);
+      const isToday=d>=today;
+      const yesterday=new Date(today); yesterday.setDate(yesterday.getDate()-1);
+      const isYest=d>=yesterday&&d<today;
+      const label=isToday?'Aujourd\'hui':isYest?'Hier':d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});
+      const time=d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+      return `<span style="font-size:11px">${label} <span style="color:var(--text-muted)">${time}</span></span>`;
+    };
     const rows=filtered.map(u=>{
       const site=u.site_id?DB.getSiteById(u.site_id):null;
       const perms=DB.getPerms(u.role);
@@ -4075,11 +4103,21 @@ const App = {
         u.acces_principal!==false?'<span style="font-size:10px;padding:1px 6px;background:#e8f5e9;color:var(--success);border-radius:10px">🖥 Principal</span>':'',
         u.acces_horloge!==false?'<span style="font-size:10px;padding:1px 6px;background:#e3f2fd;color:#01579b;border-radius:10px">📱 Mobile</span>':'',
       ].filter(Boolean).join(' ');
-      return`<tr>
-        <td><strong>${u.username}</strong></td><td>${u.nom}</td>
+      const loginStatus=u.first_login_at
+        ?'<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 7px;border-radius:10px;background:#e8f5e9;color:var(--success);font-weight:700">✓ Connecté</span>'
+        :'<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 7px;border-radius:10px;background:#f5f5f5;color:var(--text-muted);font-weight:700">⚫ Jamais</span>';
+      return`<tr${!u.first_login_at?' style="opacity:0.75"':''}>
+        <td><strong>${u.username}</strong><div style="margin-top:2px">${loginStatus}</div></td>
+        <td>${u.nom}</td>
         <td><span class="badge badge-role">${getRoleLabel(u.role)}</span><div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${permBadges||'<span style="font-size:10px;color:var(--text-muted)">Accès site uniquement</span>'}</div></td>
         <td>${site?site.nom:'— Tous —'}</td>
         <td style="white-space:nowrap">${appBadges}</td>
+        <td>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px">1re connexion</div>
+          ${fmtLogin(u.first_login_at)}
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;margin-bottom:2px">Dernière connexion</div>
+          ${fmtLogin(u.last_login_at)}
+        </td>
         <td style="white-space:nowrap">
           <button class="btn btn-ghost btn-xs" onclick="App.openEditUser('${u.id}')">✏ Modifier</button>
           <button class="btn btn-ghost btn-xs" onclick="App.openChangePwd('${u.id}')">🔑 MDP</button>
@@ -4087,23 +4125,39 @@ const App = {
         </td>
       </tr>`;
     }).join('');
-    const countLabel=q?`<span class="text-muted text-sm">${filtered.length} / ${all.length} résultat${filtered.length>1?'s':''}</span>`:`<span class="text-muted text-sm">${all.length} utilisateur${all.length>1?'s':''}</span>`;
+    const countLabel=`<span class="text-muted text-sm">${filtered.length}${q||onlyNeverLogged?' / '+all.length:''} utilisateur${filtered.length>1?'s':''}</span>`;
     document.getElementById('page-content').innerHTML=`
-      <div class="alert alert-info">Configurez les permissions de chaque rôle dans <strong>⚙️ Paramètres → Rôles</strong>.</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:8px">
+          <span style="font-size:20px">✅</span>
+          <div><div style="font-size:18px;font-weight:800;color:var(--accent-green)">${connectedCount}</div><div style="font-size:11px;color:var(--text-muted)">Déjà connectés</div></div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:8px;${neverCount>0?'border-color:var(--accent);':''}">
+          <span style="font-size:20px">⚫</span>
+          <div><div style="font-size:18px;font-weight:800;color:${neverCount>0?'var(--accent)':'var(--text-muted)'}">${neverCount}</div><div style="font-size:11px;color:var(--text-muted)">Jamais connectés</div></div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:8px">
+          <span style="font-size:20px">👥</span>
+          <div><div style="font-size:18px;font-weight:800">${all.length}</div><div style="font-size:11px;color:var(--text-muted)">Total utilisateurs</div></div>
+        </div>
+      </div>
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
         <div style="position:relative;flex:1;min-width:200px;max-width:380px">
           <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:14px">🔍</span>
           <input id="user-search" type="search" placeholder="Rechercher par identifiant, nom, rôle, site…"
-            value="${this._userSearch}"
+            value="${this._userSearch||''}"
             oninput="App.renderUtilisateurs(this.value)"
             style="width:100%;padding:9px 12px 9px 34px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface)">
         </div>
+        <button class="btn btn-${onlyNeverLogged?'primary':'ghost'} btn-sm" onclick="App.renderUtilisateurs(undefined,${!onlyNeverLogged})">
+          ⚫ Jamais connectés${neverCount>0?' ('+neverCount+')':''}
+        </button>
         ${countLabel}
       </div>
       <div class="card" style="padding:0;overflow:hidden">
         <div class="table-wrapper"><table class="data-table">
-          <thead><tr><th>Identifiant</th><th>Nom</th><th>Rôle & Permissions</th><th>Site</th><th>Apps</th><th>Actions</th></tr></thead>
-          <tbody>${rows||`<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">${q?'Aucun résultat pour "'+q+'"':'Aucun utilisateur.'}</td></tr>`}</tbody>
+          <thead><tr><th>Identifiant</th><th>Nom</th><th>Rôle & Permissions</th><th>Site</th><th>Apps</th><th>Connexions</th><th>Actions</th></tr></thead>
+          <tbody>${rows||`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-muted)">Aucun résultat.</td></tr>`}</tbody>
         </table></div>
       </div>`;
     if(q) { const el=document.getElementById('user-search'); if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);} }
