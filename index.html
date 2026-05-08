@@ -2538,8 +2538,13 @@ const App = {
     const isKA=currentSession.role==='kindness_ambassador';
     const sites=DB.getSites().filter(s=>s.actif);
     const site=DB.getSiteById(this.currentSite);
-    const employees=this._getVisibleEmps(this.currentSite).filter(e=>e.pointage_horaire!==false);
     const date=this._shiftDate;
+    // Exclure les collaborateurs marqués OFF dans le planning semaine pour cette date
+    const employees=this._getVisibleEmps(this.currentSite).filter(e=>{
+      if(e.pointage_horaire===false) return false;
+      const ws=DB.getWeeklySchedule(e.id,date);
+      return !ws?.is_off; // si is_off=true → jour de repos planifié → ne pas afficher
+    });
     const shifts=DB.getShifts(this.currentSite, date);
 
     const siteSelector=isKA?`<strong style="color:var(--text-muted)">${site?.nom||''}</strong>`:`<select onchange="App.changeSite(this.value)" style="max-width:220px">${sites.map(s=>`<option value="${s.id}" ${s.id===this.currentSite?'selected':''}>${s.nom}</option>`).join('')}</select>`;
@@ -2749,7 +2754,12 @@ const App = {
     let gTotal=0,gPresent=0,gEnCours=0,gComplet=0;
     let sections='';
     sites.forEach(site=>{
-      const emps=DB.getEmployees().filter(e=>e.actif&&e.pointage_horaire!==false&&DB.getEffectiveSiteId(e.id,date)===site.id);
+      const emps=DB.getEmployees().filter(e=>{
+        if(!e.actif||e.pointage_horaire===false) return false;
+        if(DB.getEffectiveSiteId(e.id,date)!==site.id) return false;
+        const ws=DB.getWeeklySchedule(e.id,date);
+        return !ws?.is_off; // exclure si jour OFF dans le planning semaine
+      });
       if(!emps.length) return;
       const siteShifts=DB.getShifts(site.id,date);
       const lock=DB.getLock(site.id,date.substring(0,7));
