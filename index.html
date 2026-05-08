@@ -2645,7 +2645,7 @@ const App = {
       </tr>`;
     }).join('');
 
-    const unvalidated=shifts.filter(s=>s.heure_arrivee&&!s.validated_by_ka).length;
+    const unvalidated=employees.filter(emp=>{const s=DB.getShiftByEmpDate(emp.id,date);return s?.heure_arrivee&&!s?.validated_by_ka;}).length;
 
     // --- Bloc "demandes en attente" visible par les admins ---
     const allPending=DB.getPendingShiftChanges(this.canGlobal()?null:this.currentSite);
@@ -2772,7 +2772,7 @@ const App = {
         else if(statut==='complet'){sComplet++;gComplet++;}
         else sVide++;
         gTotal++; if(statut!=='vide') gPresent++;
-        return this._shiftRowHtml(emp,date,siteShifts,lock,canEdit,false,canValidateShift,false);
+        return this._shiftRowHtml(emp,date,lock,canEdit,false,canValidateShift,false);
       }).join('');
       const siteShort=site.nom.replace('StayHere - ','');
       const statsBadges=
@@ -2818,9 +2818,9 @@ const App = {
   },
 
   // Construit le HTML d'une ligne shift (partagé par vue site et vue globale)
-  _shiftRowHtml(emp, date, shifts, lock, canEdit, canRequest, canValidateShift, isKA) {
+  _shiftRowHtml(emp, date, lock, canEdit, canRequest, canValidateShift, isKA) {
     const schedule=DB.getSchedule(emp.id);
-    const shift=shifts.find(s=>s.employee_id===emp.id)||null;
+    const shift=DB.getShiftByEmpDate(emp.id,date);
     const statut=DB.shiftStatut(shift,schedule);
     const statutLabels={complet:'Complet',incomplet:'Incomplet',en_cours:'En cours',vide:'—'};
     const pendingReq=Cache.shiftChangeRequests.find(r=>r.employee_id===emp.id&&r.date===date&&r.status==='pending');
