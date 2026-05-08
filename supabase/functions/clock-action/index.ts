@@ -295,7 +295,42 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // ── 7. Récupérer le shift du jour ────────────────────────
+    // ── 7a. Auto-clôture des shifts ouverts des jours précédents ──
+    // Si le collaborateur démarre un nouveau shift alors qu'il en a un ouvert
+    // d'un jour précédent (ex : oubli de pointer le départ hier), on le ferme
+    // automatiquement avant de créer le nouveau.
+    if (action === 'start') {
+      const { data: staleShifts } = await sbAdmin
+        .from('sh_shifts')
+        .select('*')
+        .eq('employee_id', empId)
+        .not('heure_arrivee', 'is', null)
+        .is('heure_depart', null)
+        .lt('date', today); // jours STRICTEMENT antérieurs
+
+      for (const stale of staleShifts ?? []) {
+        const closeTime = stale.heure_fin_prevue || '23:59';
+        const [ah, am] = stale.heure_arrivee.split(':').map(Number);
+        const [dh, dm] = closeTime.split(':').map(Number);
+        let dureeMin = (dh * 60 + dm) - (ah * 60 + am);
+        if (dureeMin < 0) dureeMin += 1440;
+        dureeMin = Math.max(0, dureeMin - (stale.pause_minutes || 0));
+
+        await sbAdmin
+          .from('sh_shifts')
+          .update({
+            heure_depart: closeTime,
+            duree_minutes: dureeMin,
+            updated_by: 'auto-close',
+            updated_at: nowMaroc(),
+          })
+          .eq('id', stale.id);
+
+        console.log(`Auto-clôture shift ${stale.id} (${stale.date}) à ${closeTime}`);
+      }
+    }
+
+    // ── 7b. Récupérer le shift du jour ────────────────────────
     const { data: existingShift } = await sbAdmin
       .from('sh_shifts')
       .select('*')

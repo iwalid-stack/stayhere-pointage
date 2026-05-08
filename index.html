@@ -2134,13 +2134,10 @@ const App = {
     const travCount=todayEntries.filter(p=>['travaille','double'].includes(p.type)).length;
     const absCount=todayEntries.filter(p=>['absence','maladie','at'].includes(p.type)).length;
 
-    // Shifts en cours
-    const nowTs=Date.now();
-    const activeShifts=(Cache.shifts||[]).filter(sh=>{
-      if(!sh.clock_in||sh.clock_out) return false;
-      const inTs=new Date(sh.clock_in).getTime();
-      return nowTs-inTs<14*3600*1000;
-    });
+    // Shifts en cours (aujourd'hui uniquement, arrivée enregistrée, pas encore parti)
+    const activeShifts=(Cache.shifts||[]).filter(sh=>
+      sh.date===today && sh.heure_arrivee && !sh.heure_depart
+    );
 
     // Validations en attente (demandes de modification de shift)
     const pendingValidations=(Cache.shiftChangeRequests||[]).filter(p=>p.status==='pending').length;
@@ -2295,15 +2292,17 @@ const App = {
     } else if(type==='shifts') {
       title='Shifts actifs en ce moment';
       color='#0277bd';
-      const activeShifts=(Cache.shifts||[]).filter(sh=>{
-        if(!sh.clock_in||sh.clock_out) return false;
-        return nowTs-new Date(sh.clock_in).getTime()<14*3600*1000;
-      });
+      const activeShifts=(Cache.shifts||[]).filter(sh=>
+        sh.date===today && sh.heure_arrivee && !sh.heure_depart
+      );
       rows=activeShifts.map(sh=>{
         const emp=allEmps.find(e=>e.id===sh.employee_id);
         const site=allSites.find(s=>s.id===sh.site_id);
-        const inTime=new Date(sh.clock_in).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-        const mins=Math.floor((nowTs-new Date(sh.clock_in).getTime())/60000);
+        const inTime=sh.heure_arrivee||'—';
+        // Calcul durée depuis heure_arrivee (HH:MM) + date
+        const [ah,am]=(sh.heure_arrivee||'00:00').split(':').map(Number);
+        const shiftStartTs=new Date(`${sh.date}T${String(ah).padStart(2,'0')}:${String(am).padStart(2,'0')}:00`).getTime();
+        const mins=Math.max(0,Math.floor((nowTs-shiftStartTs)/60000));
         const dur=mins>=60?`${Math.floor(mins/60)}h${String(mins%60).padStart(2,'0')}`:`${mins}min`;
         const nomAff=emp?`${emp.prenom||''} ${emp.nom||''}`.trim():sh.employee_id;
         return {nom:nomAff,sub:site?.nom||'—',badge:`Entré ${inTime} · ${dur}`,avatar:(nomAff[0]||'?').toUpperCase()};
@@ -2461,7 +2460,7 @@ const App = {
   },
   prevMonth(){if(this.currentMonth===0){this.currentMonth=11;this.currentYear--;}else this.currentMonth--;this.renderPointage();},
   nextMonth(){if(this.currentMonth===11){this.currentMonth=0;this.currentYear++;}else this.currentMonth++;this.renderPointage();},
-  changeSite(id){this.currentSite=id;this.renderPointage();},
+  changeSite(id){this.currentSite=id;this.renderPage();},
   exportCSV(){const csv=DB.exportCSV(this.currentSite,this.currentYear,this.currentMonth+1);const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));a.download=`pointage_${this.currentSite}_${this.currentYear}-${String(this.currentMonth+1).padStart(2,'0')}.csv`;a.click();},
   exportGlobal(){
     const ym=`${this.currentYear}-${String(this.currentMonth+1).padStart(2,'0')}`;
