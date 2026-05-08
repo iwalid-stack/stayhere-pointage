@@ -2134,10 +2134,21 @@ const App = {
     const travCount=todayEntries.filter(p=>['travaille','double'].includes(p.type)).length;
     const absCount=todayEntries.filter(p=>['absence','maladie','at'].includes(p.type)).length;
 
-    // Shifts en cours (aujourd'hui uniquement, arrivée enregistrée, pas encore parti)
-    const activeShifts=(Cache.shifts||[]).filter(sh=>
-      sh.date===today && sh.heure_arrivee && !sh.heure_depart
-    );
+    // Shifts en cours : aujourd'hui, OU shift overnight de la veille encore actif
+    // (ex : shift 20h→08h démarré hier et pas encore terminé)
+    const yesterday=(()=>{const d=new Date();d.setDate(d.getDate()-1);return d.toISOString().substring(0,10);})();
+    const nowMin=(()=>{const d=new Date();return d.getHours()*60+d.getMinutes();})();
+    const activeShifts=(Cache.shifts||[]).filter(sh=>{
+      if(!sh.heure_arrivee||sh.heure_depart) return false;
+      if(sh.date===today) return true;
+      // Shift overnight de la veille : fin_prevue en matinée (< heure_arrivee) et heure pas encore passée
+      if(sh.date===yesterday&&sh.heure_fin_prevue){
+        const arrivMin=sh.heure_arrivee.split(':').map(Number).reduce((h,m)=>h*60+m,0);
+        const finMin=sh.heure_fin_prevue.split(':').map(Number).reduce((h,m)=>h*60+m,0);
+        if(finMin<arrivMin&&nowMin<finMin) return true; // overnight encore en cours
+      }
+      return false;
+    });
 
     // Validations en attente (demandes de modification de shift)
     const pendingValidations=(Cache.shiftChangeRequests||[]).filter(p=>p.status==='pending').length;
@@ -2292,20 +2303,31 @@ const App = {
     } else if(type==='shifts') {
       title='Shifts actifs en ce moment';
       color='#0277bd';
-      const activeShifts=(Cache.shifts||[]).filter(sh=>
-        sh.date===today && sh.heure_arrivee && !sh.heure_depart
-      );
+      const _yesterday=(()=>{const d=new Date();d.setDate(d.getDate()-1);return d.toISOString().substring(0,10);})();
+      const _nowMin=(()=>{const d=new Date();return d.getHours()*60+d.getMinutes();})();
+      const activeShifts=(Cache.shifts||[]).filter(sh=>{
+        if(!sh.heure_arrivee||sh.heure_depart) return false;
+        if(sh.date===today) return true;
+        if(sh.date===_yesterday&&sh.heure_fin_prevue){
+          const arrivMin=sh.heure_arrivee.split(':').map(Number).reduce((h,m)=>h*60+m,0);
+          const finMin=sh.heure_fin_prevue.split(':').map(Number).reduce((h,m)=>h*60+m,0);
+          if(finMin<arrivMin&&_nowMin<finMin) return true;
+        }
+        return false;
+      });
       rows=activeShifts.map(sh=>{
         const emp=allEmps.find(e=>e.id===sh.employee_id);
         const site=allSites.find(s=>s.id===sh.site_id);
         const inTime=sh.heure_arrivee||'—';
+        const isOvn=sh.date===_yesterday;
         // Calcul durée depuis heure_arrivee (HH:MM) + date
         const [ah,am]=(sh.heure_arrivee||'00:00').split(':').map(Number);
         const shiftStartTs=new Date(`${sh.date}T${String(ah).padStart(2,'0')}:${String(am).padStart(2,'0')}:00`).getTime();
         const mins=Math.max(0,Math.floor((nowTs-shiftStartTs)/60000));
         const dur=mins>=60?`${Math.floor(mins/60)}h${String(mins%60).padStart(2,'0')}`:`${mins}min`;
         const nomAff=emp?`${emp.prenom||''} ${emp.nom||''}`.trim():sh.employee_id;
-        return {nom:nomAff,sub:site?.nom||'—',badge:`Entré ${inTime} · ${dur}`,avatar:(nomAff[0]||'?').toUpperCase()};
+        const badge=isOvn?`🌙 Nuit · Entré ${inTime} · ${dur}`:`Entré ${inTime} · ${dur}`;
+        return {nom:nomAff,sub:site?.nom||'—',badge,avatar:(nomAff[0]||'?').toUpperCase()};
       });
 
     } else if(type==='users') {

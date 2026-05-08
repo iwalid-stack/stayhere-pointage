@@ -296,9 +296,13 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── 7a. Auto-clôture des shifts ouverts des jours précédents ──
-    // Si le collaborateur démarre un nouveau shift alors qu'il en a un ouvert
-    // d'un jour précédent (ex : oubli de pointer le départ hier), on le ferme
-    // automatiquement avant de créer le nouveau.
+    // Quand un collaborateur démarre un nouveau shift, on clôture tous ses
+    // shifts ouverts des jours précédents.
+    //
+    // CAS OVERNIGHT (ex 20h→08h) : si le shift d'hier n'a pas encore atteint
+    // son heure de fin (il est 06h00, fin prévue 08h00), on le clôture quand
+    // même à l'heure actuelle car le collaborateur démarre explicitement un
+    // nouveau shift — cela signifie qu'il est disponible.
     if (action === 'start') {
       const { data: staleShifts } = await sbAdmin
         .from('sh_shifts')
@@ -309,7 +313,23 @@ Deno.serve(async (req: Request) => {
         .lt('date', today); // jours STRICTEMENT antérieurs
 
       for (const stale of staleShifts ?? []) {
-        const closeTime = stale.heure_fin_prevue || '23:59';
+        const finPrevue = stale.heure_fin_prevue || null;
+        // Détecter shift overnight : heure_fin_prevue < heure_arrivee en minutes
+        const isOvernightStale = finPrevue
+          ? timeToMin(finPrevue) < timeToMin(stale.heure_arrivee)
+          : false;
+
+        // Pour un shift overnight dont la fin est prévue dans le futur,
+        // on clôture à l'heure actuelle (collaborateur pointe explicitement un nouveau shift)
+        // Pour les autres cas, on clôture à heure_fin_prevue ou '23:59'
+        const currentTime = timeMaroc();
+        let closeTime: string;
+        if (isOvernightStale && finPrevue && timeToMin(currentTime) < timeToMin(finPrevue)) {
+          closeTime = currentTime; // encore en cours théoriquement, on coupe maintenant
+        } else {
+          closeTime = finPrevue || '23:59';
+        }
+
         const [ah, am] = stale.heure_arrivee.split(':').map(Number);
         const [dh, dm] = closeTime.split(':').map(Number);
         let dureeMin = (dh * 60 + dm) - (ah * 60 + am);
@@ -319,14 +339,14 @@ Deno.serve(async (req: Request) => {
         await sbAdmin
           .from('sh_shifts')
           .update({
-            heure_depart: closeTime,
+            heure_depart:  closeTime,
             duree_minutes: dureeMin,
-            updated_by: 'auto-close',
-            updated_at: nowMaroc(),
+            updated_by:    'auto-close',
+            updated_at:    nowMaroc(),
           })
           .eq('id', stale.id);
 
-        console.log(`Auto-clôture shift ${stale.id} (${stale.date}) à ${closeTime}`);
+        console.log(`Auto-clôture shift ${stale.id} (${stale.date} ${stale.heure_arrivee}→${closeTime}${isOvernightStale ? ' [overnight]' : ''})`);
       }
     }
 
