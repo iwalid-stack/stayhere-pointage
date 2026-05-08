@@ -1856,25 +1856,25 @@ const App = {
           <div class="user-role">${ROLES[currentSession.role]||currentSession.role}</div>
         </div>
         <nav>
-          <div class="nav-item ${this.currentPage==='home'?'active':''}" onclick="App.navigate('home')" style="padding:12px 20px;font-size:14px;font-weight:600;letter-spacing:0.1px"><span class="icon">🏠</span> Accueil</div>
+          <div class="nav-item" data-page="home" onclick="App.navigate('home')" style="padding:12px 20px;font-size:14px;font-weight:600;letter-spacing:0.1px"><span class="icon">🏠</span> Accueil</div>
           <div class="nav-section">Pointage</div>
-          <div class="nav-item ${this.currentPage==='pointage'?'active':''}" onclick="App.navigate('pointage')"><span class="icon">📅</span> Saisie du pointage</div>
-          ${(this.canVoirEquipe()||this.canVoirEquipeTerrain()||this.canGlobal())?`<div class="nav-item ${this.currentPage==='shifts'?'active':''}" onclick="App.navigate('shifts')"><span class="icon">⏱</span> Pointage horaire</div>`:''}
-          ${this.canSaisirPlanning()?`<div class="nav-item ${this.currentPage==='planning'?'active':''}" onclick="App.navigate('planning')"><span class="icon">📋</span> Planning semaine</div>`:''}
-          ${this.canGererRotation()?`<div class="nav-item ${this.currentPage==='rotation'?'active':''}" onclick="App.navigate('rotation')"><span class="icon">🔄</span> Shifts rotatifs</div>`:''}
-          ${this.canGlobal()?`<div class="nav-item ${this.currentPage==='synthese'?'active':''}" onclick="App.navigate('synthese')"><span class="icon">📊</span> Synthèse globale</div>`:''}
-          ${this.canValidate()?`<div class="nav-item ${this.currentPage==='validation'?'active':''}" onclick="App.navigate('validation')"><span class="icon">✅</span> Validation</div>`:''}
-          ${(this.canValidate()||this.canManage())?`<div class="nav-item ${this.currentPage==='conges'?'active':''}" onclick="App.navigate('conges')"><span class="icon">🏖</span> Congés & RECUP</div>`:''}
+          <div class="nav-item" data-page="pointage" onclick="App.navigate('pointage')"><span class="icon">📅</span> Saisie du pointage</div>
+          ${(this.canVoirEquipe()||this.canVoirEquipeTerrain()||this.canGlobal())?`<div class="nav-item" data-page="shifts" onclick="App.navigate('shifts')"><span class="icon">⏱</span> Pointage horaire</div>`:''}
+          ${this.canSaisirPlanning()?`<div class="nav-item" data-page="planning" onclick="App.navigate('planning')"><span class="icon">📋</span> Planning semaine</div>`:''}
+          ${this.canGererRotation()?`<div class="nav-item" data-page="rotation" onclick="App.navigate('rotation')"><span class="icon">🔄</span> Shifts rotatifs</div>`:''}
+          ${this.canGlobal()?`<div class="nav-item" data-page="synthese" onclick="App.navigate('synthese')"><span class="icon">📊</span> Synthèse globale</div>`:''}
+          ${this.canValidate()?`<div class="nav-item" data-page="validation" onclick="App.navigate('validation')"><span class="icon">✅</span> Validation</div>`:''}
+          ${(this.canValidate()||this.canManage())?`<div class="nav-item" data-page="conges" onclick="App.navigate('conges')"><span class="icon">🏖</span> Congés & RECUP</div>`:''}
           ${this.canManage()?`
           <div class="nav-section">Administration</div>
-          <div class="nav-item ${this.currentPage==='collaborateurs'?'active':''}" onclick="App.navigate('collaborateurs')"><span class="icon">👥</span> Collaborateurs</div>
-          <div class="nav-item ${this.currentPage==='sites'?'active':''}" onclick="App.navigate('sites')"><span class="icon">🏡</span> Sites</div>
-          <div class="nav-item ${this.currentPage==='feries'?'active':''}" onclick="App.navigate('feries')"><span class="icon">🎌</span> Jours fériés</div>
-          <div class="nav-item ${this.currentPage==='utilisateurs'?'active':''}" onclick="App.navigate('utilisateurs')"><span class="icon">🔐</span> Utilisateurs</div>
-          <div class="nav-item ${this.currentPage==='parametres'?'active':''}" onclick="App.navigate('parametres')"><span class="icon">⚙️</span> Paramètres</div>
+          <div class="nav-item" data-page="collaborateurs" onclick="App.navigate('collaborateurs')"><span class="icon">👥</span> Collaborateurs</div>
+          <div class="nav-item" data-page="sites" onclick="App.navigate('sites')"><span class="icon">🏡</span> Sites</div>
+          <div class="nav-item" data-page="feries" onclick="App.navigate('feries')"><span class="icon">🎌</span> Jours fériés</div>
+          <div class="nav-item" data-page="utilisateurs" onclick="App.navigate('utilisateurs')"><span class="icon">🔐</span> Utilisateurs</div>
+          <div class="nav-item" data-page="parametres" onclick="App.navigate('parametres')"><span class="icon">⚙️</span> Paramètres</div>
           <div class="nav-section">Contrôle</div>
-          <div class="nav-item ${this.currentPage==='audit'?'active':''}" onclick="App.navigate('audit')"><span class="icon">📋</span> Historique</div>`:''}
-          ${this.canLock()?`<div class="nav-item ${this.currentPage==='verrous'?'active':''}" onclick="App.navigate('verrous')"><span class="icon">🔒</span> Verrous</div>`:''}
+          <div class="nav-item" data-page="audit" onclick="App.navigate('audit')"><span class="icon">📋</span> Historique</div>`:''}
+          ${this.canLock()?`<div class="nav-item" data-page="verrous" onclick="App.navigate('verrous')"><span class="icon">🔒</span> Verrous</div>`:''}
         </nav>
         <div class="nav-section">Accès rapide</div>
         <div class="nav-item" onclick="window.open('clock.html','_blank')"><span class="icon">📱</span> App Pointage Mobile</div>
@@ -2093,37 +2093,13 @@ const App = {
   },
 
   navigate(page) {
-    // Réinitialiser les recherches quand on change de page
     if(page!==this.currentPage) { this._collabSearch=''; this._userSearch=''; }
     this.currentPage=page;
-    // Re-render nav to reflect active state (template-driven, no DOM hacking)
-    const nav=document.querySelector('.sidebar nav');
-    if(nav) {
-      const isKA=currentSession.role==='kindness_ambassador';
-      const isGov=['gouvernante_generale','assistante_gouvernante'].includes(currentSession.role);
-      nav.innerHTML=`
-        <div class="nav-item ${this.currentPage==='home'?'active':''}" onclick="App.navigate('home')" style="padding:12px 20px;font-size:14px;font-weight:600;letter-spacing:0.1px"><span class="icon">🏠</span> Accueil</div>
-        <div class="nav-section">Pointage</div>
-        <div class="nav-item ${this.currentPage==='pointage'?'active':''}" onclick="App.navigate('pointage')"><span class="icon">📅</span> Saisie du pointage</div>
-        ${(this.canVoirEquipe()||this.canVoirEquipeTerrain()||this.canGlobal())?`<div class="nav-item ${this.currentPage==='shifts'?'active':''}" onclick="App.navigate('shifts')"><span class="icon">⏱</span> Pointage horaire</div>`:''}
-        ${this.canSaisirPlanning()?`<div class="nav-item ${this.currentPage==='planning'?'active':''}" onclick="App.navigate('planning')"><span class="icon">📋</span> Planning semaine</div>`:''}
-        ${this.canGererRotation()?`<div class="nav-item ${this.currentPage==='rotation'?'active':''}" onclick="App.navigate('rotation')"><span class="icon">🔄</span> Shifts rotatifs</div>`:''}
-        ${this.canGlobal()?`<div class="nav-item ${this.currentPage==='synthese'?'active':''}" onclick="App.navigate('synthese')"><span class="icon">📊</span> Synthèse globale</div>`:''}
-        ${this.canValidate()?`<div class="nav-item ${this.currentPage==='validation'?'active':''}" onclick="App.navigate('validation')"><span class="icon">✅</span> Validation</div>`:''}
-        ${(this.canValidate()||this.canManage())?`<div class="nav-item ${this.currentPage==='conges'?'active':''}" onclick="App.navigate('conges')"><span class="icon">🏖</span> Congés & RECUP</div>`:''}
-        ${this.canManage()?`
-        <div class="nav-section">Administration</div>
-        <div class="nav-item ${this.currentPage==='collaborateurs'?'active':''}" onclick="App.navigate('collaborateurs')"><span class="icon">👥</span> Collaborateurs</div>
-        <div class="nav-item ${this.currentPage==='sites'?'active':''}" onclick="App.navigate('sites')"><span class="icon">🏡</span> Sites</div>
-        <div class="nav-item ${this.currentPage==='feries'?'active':''}" onclick="App.navigate('feries')"><span class="icon">🎌</span> Jours fériés</div>
-        <div class="nav-item ${this.currentPage==='utilisateurs'?'active':''}" onclick="App.navigate('utilisateurs')"><span class="icon">🔐</span> Utilisateurs</div>
-        <div class="nav-item ${this.currentPage==='parametres'?'active':''}" onclick="App.navigate('parametres')"><span class="icon">⚙️</span> Paramètres</div>
-        <div class="nav-section">Contrôle</div>
-        <div class="nav-item ${this.currentPage==='audit'?'active':''}" onclick="App.navigate('audit')"><span class="icon">📋</span> Historique</div>`:''}
-        ${this.canLock()?`<div class="nav-item ${this.currentPage==='verrous'?'active':''}" onclick="App.navigate('verrous')"><span class="icon">🔒</span> Verrous</div>`:''}
-      `;
-    }
-    // Close sidebar on mobile after navigation
+    // Mise à jour légère : juste changer la classe active sur le bon item
+    document.querySelectorAll('.sidebar nav .nav-item[data-page]').forEach(el=>{
+      el.classList.toggle('active', el.dataset.page===page);
+    });
+    // Fermer sidebar mobile
     const sidebar=document.getElementById('main-sidebar');
     const overlay=document.getElementById('sidebar-overlay');
     if(sidebar?.classList.contains('sidebar-open')){sidebar.classList.remove('sidebar-open');overlay?.classList.remove('visible');}
@@ -2230,21 +2206,25 @@ const App = {
       <div style="margin-bottom:28px">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:12px">Aujourd'hui</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px">
-          <div style="background:var(--surface);border-radius:12px;padding:16px;border:1px solid var(--border)">
+          <div onclick="App.showHomeFilter('presents')" style="cursor:pointer;background:var(--surface);border-radius:12px;padding:16px;border:1px solid var(--border);transition:all .15s" onmouseover="this.style.borderColor='var(--accent-green)';this.style.boxShadow='0 2px 12px rgba(0,129,96,0.12)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
             <div style="font-size:28px;font-weight:800;color:var(--accent-green)">${travCount}</div>
             <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Présents</div>
+            <div style="font-size:10px;color:var(--accent-green);margin-top:4px;opacity:.7">Voir la liste →</div>
           </div>
-          <div style="background:var(--surface);border-radius:12px;padding:16px;border:1px solid var(--border)">
+          <div onclick="App.showHomeFilter('absents')" style="cursor:pointer;background:var(--surface);border-radius:12px;padding:16px;border:1px solid var(--border);transition:all .15s" onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 2px 12px rgba(255,98,44,0.12)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
             <div style="font-size:28px;font-weight:800;color:var(--accent)">${absCount}</div>
             <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Absents / Malades</div>
+            <div style="font-size:10px;color:var(--accent);margin-top:4px;opacity:.7">Voir la liste →</div>
           </div>
-          <div style="background:var(--surface);border-radius:12px;padding:16px;border:1px solid var(--border)">
+          <div onclick="App.showHomeFilter('shifts')" style="cursor:pointer;background:var(--surface);border-radius:12px;padding:16px;border:1px solid var(--border);transition:all .15s" onmouseover="this.style.borderColor='#0277bd';this.style.boxShadow='0 2px 12px rgba(2,119,189,0.12)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
             <div style="font-size:28px;font-weight:800;color:#0277bd">${activeShifts.length}</div>
             <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Shifts actifs</div>
+            <div style="font-size:10px;color:#0277bd;margin-top:4px;opacity:.7">Voir la liste →</div>
           </div>
-          ${this.canManage()?`<div style="background:var(--surface);border-radius:12px;padding:16px;border:1px solid var(--border)">
+          ${this.canManage()?`<div onclick="App.showHomeFilter('users')" style="cursor:pointer;background:var(--surface);border-radius:12px;padding:16px;border:1px solid var(--border);transition:all .15s" onmouseover="this.style.borderColor='#9E6EFF';this.style.boxShadow='0 2px 12px rgba(158,110,255,0.12)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
             <div style="font-size:28px;font-weight:800;color:#9E6EFF">${connectedUsers}</div>
             <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Utilisateurs connectés</div>
+            <div style="font-size:10px;color:#9E6EFF;margin-top:4px;opacity:.7">Voir la liste →</div>
           </div>`:''}
         </div>
       </div>
@@ -2278,6 +2258,108 @@ const App = {
         </div>
       </div>
     </div>`;
+  },
+
+  showHomeFilter(type) {
+    const today=todayStr();
+    const nowTs=Date.now();
+    const allEmps=DB.getEmployees().filter(e=>e.actif);
+    const allSites=DB.getSites();
+
+    let title='', color='', rows=[];
+
+    if(type==='presents') {
+      title='Présents aujourd\'hui';
+      color='var(--accent-green)';
+      const entries=(Cache.pointage||[]).filter(p=>p.date===today&&['travaille','double'].includes(p.type));
+      rows=entries.map(p=>{
+        const emp=allEmps.find(e=>e.id===p.employee_id);
+        if(!emp) return null;
+        const site=allSites.find(s=>s.id===p.site_id);
+        const typeLabel=p.type==='double'?'<span style="color:var(--double);font-weight:700">Double</span>':'Travaille';
+        return {nom:`${emp.prenom||''} ${emp.nom||''}`.trim(),sub:site?.nom||'—',badge:typeLabel,avatar:(emp.prenom||'?')[0].toUpperCase()};
+      }).filter(Boolean);
+
+    } else if(type==='absents') {
+      title='Absents / Malades aujourd\'hui';
+      color='var(--accent)';
+      const labelMap={absence:'Absence',maladie:'Maladie',at:'AT'};
+      const entries=(Cache.pointage||[]).filter(p=>p.date===today&&['absence','maladie','at'].includes(p.type));
+      rows=entries.map(p=>{
+        const emp=allEmps.find(e=>e.id===p.employee_id);
+        if(!emp) return null;
+        const site=allSites.find(s=>s.id===p.site_id);
+        return {nom:`${emp.prenom||''} ${emp.nom||''}`.trim(),sub:site?.nom||'—',badge:labelMap[p.type]||p.type,avatar:(emp.prenom||'?')[0].toUpperCase()};
+      }).filter(Boolean);
+
+    } else if(type==='shifts') {
+      title='Shifts actifs en ce moment';
+      color='#0277bd';
+      const activeShifts=(Cache.shifts||[]).filter(sh=>{
+        if(!sh.clock_in||sh.clock_out) return false;
+        return nowTs-new Date(sh.clock_in).getTime()<14*3600*1000;
+      });
+      rows=activeShifts.map(sh=>{
+        const emp=allEmps.find(e=>e.id===sh.employee_id);
+        const site=allSites.find(s=>s.id===sh.site_id);
+        const inTime=new Date(sh.clock_in).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+        const mins=Math.floor((nowTs-new Date(sh.clock_in).getTime())/60000);
+        const dur=mins>=60?`${Math.floor(mins/60)}h${String(mins%60).padStart(2,'0')}`:`${mins}min`;
+        const nomAff=emp?`${emp.prenom||''} ${emp.nom||''}`.trim():sh.employee_id;
+        return {nom:nomAff,sub:site?.nom||'—',badge:`Entré ${inTime} · ${dur}`,avatar:(nomAff[0]||'?').toUpperCase()};
+      });
+
+    } else if(type==='users') {
+      title='Utilisateurs connectés';
+      color='#9E6EFF';
+      const users=(Cache.users||[]).filter(u=>u.first_login_at);
+      rows=users.map(u=>{
+        const emp=allEmps.find(e=>e.id===u.employee_id);
+        const roleFmt={admin:'Admin',cluster_ops_manager:'Cluster Ops',kindness_ambassador:'KA',rh:'RH'}[u.role]||u.role;
+        return {nom:u.nom||u.email||'—',sub:emp?`${emp.prenom||''} ${emp.nom||''}`.trim()+' · '+roleFmt:roleFmt,badge:roleFmt,avatar:(u.nom||u.email||'?')[0].toUpperCase()};
+      });
+    }
+
+    // Build modal
+    const existing=document.getElementById('home-filter-modal');
+    if(existing) existing.remove();
+
+    const modal=document.createElement('div');
+    modal.id='home-filter-modal';
+    modal.style.cssText='position:fixed;inset:0;z-index:9000;display:flex;align-items:flex-end;justify-content:flex-end';
+    modal.innerHTML=`
+      <div onclick="document.getElementById('home-filter-modal').remove()" style="position:absolute;inset:0;background:rgba(0,0,0,0.3);backdrop-filter:blur(2px)"></div>
+      <div style="position:relative;background:var(--surface);border-radius:20px 0 0 20px;width:min(420px,95vw);height:100vh;display:flex;flex-direction:column;box-shadow:-8px 0 40px rgba(0,0,0,0.18);overflow:hidden">
+        <!-- Header -->
+        <div style="padding:24px 24px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-size:16px;font-weight:700;color:var(--text)">${title}</div>
+              <div style="font-size:13px;color:${color};font-weight:600;margin-top:2px">${rows.length} personne${rows.length!==1?'s':''}</div>
+            </div>
+            <button onclick="document.getElementById('home-filter-modal').remove()" style="background:var(--bg);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-family:inherit">×</button>
+          </div>
+        </div>
+        <!-- List -->
+        <div style="flex:1;overflow-y:auto;padding:16px">
+          ${rows.length===0?`<div style="text-align:center;padding:48px 16px;color:var(--text-muted)"><div style="font-size:40px;margin-bottom:12px">🕊️</div><div style="font-size:14px">Aucune entrée</div></div>`
+          :rows.map(r=>`
+            <div style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;margin-bottom:6px;background:var(--bg);border:1px solid var(--border)">
+              <div style="width:38px;height:38px;border-radius:50%;background:${color}22;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:${color};flex-shrink:0">${r.avatar}</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nom}</div>
+                <div style="font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.sub}</div>
+              </div>
+              <div style="font-size:11px;padding:3px 8px;border-radius:12px;background:${color}18;color:${color};font-weight:600;white-space:nowrap">${r.badge}</div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    // Animate in
+    const panel=modal.querySelector('div[style*="position:relative"]');
+    panel.style.transform='translateX(100%)';
+    panel.style.transition='transform .28s cubic-bezier(.32,.72,0,1)';
+    requestAnimationFrame(()=>requestAnimationFrame(()=>panel.style.transform='translateX(0)'));
   },
 
   // ---- POINTAGE ----
