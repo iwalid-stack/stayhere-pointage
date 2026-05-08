@@ -2545,6 +2545,36 @@ const App = {
       const ws=DB.getWeeklySchedule(e.id,date);
       return !ws?.is_off; // si is_off=true → jour de repos planifié → ne pas afficher
     });
+
+    // ── Rafraîchissement DB en arrière-plan ──────────────────────────────────
+    // Certains shifts (pointés via GPS sur un site différent du site assigné) peuvent
+    // être absents de Cache.shifts à cause d'un filtre RLS par site_id.
+    // On requête ici directement par employee_id pour les récupérer proprement.
+    const _bgSeq=this._navSeq; const _bgDate=date;
+    const _bgEmpIds=employees.map(e=>e.id);
+    if(_bgEmpIds.length>0){
+      SB.from('sh_shifts').select('*').in('employee_id',_bgEmpIds).eq('date',_bgDate)
+        .then(({data,error})=>{
+          if(error){console.warn('[shifts bg-refresh]',error.message);return;}
+          if(!data||data.length===0) return;
+          let changed=false;
+          for(const s of data){
+            const idx=Cache.shifts.findIndex(x=>x.id===s.id);
+            if(idx!==-1){
+              const old=Cache.shifts[idx];
+              // mise à jour si arrivée/départ ont changé
+              if(old.heure_arrivee!==s.heure_arrivee||old.heure_depart!==s.heure_depart||old.validated_by_ka!==s.validated_by_ka){
+                Cache.shifts[idx]=s; changed=true;
+              }
+            } else { Cache.shifts.unshift(s); changed=true; }
+          }
+          // Re-render seulement si des données ont changé et qu'on est toujours sur la même page/date
+          if(changed&&this._navSeq===_bgSeq&&this._shiftDate===_bgDate&&this.currentPage==='shifts'){
+            this.renderShifts();
+          }
+        });
+    }
+    // ────────────────────────────────────────────────────────────────────────
     // On ne filtre PAS par site_id ici : un shift pointé via GPS peut avoir
     // un site_id différent du site assigné à l'employé (site GPS le plus proche).
     // On cherche donc par employé+date, indépendamment du site.
@@ -2983,7 +3013,9 @@ const App = {
   async validateAllShifts() {
     if(!confirm('Valider tous les shifts non validés de cette journée ?'))return;
     setSyncStatus('busy','↻ Validation...');
-    const shifts=DB.getShifts(this.currentSite,this._shiftDate).filter(s=>s.heure_arrivee&&!s.validated_by_ka);
+    // Utiliser les employés visibles + getShiftByEmpDate pour inclure les shifts GPS (site différent)
+    const _vaEmps=this._getVisibleEmps(this.currentSite).filter(e=>e.pointage_horaire!==false);
+    const shifts=_vaEmps.map(e=>DB.getShiftByEmpDate(e.id,this._shiftDate)).filter(s=>s?.heure_arrivee&&!s.validated_by_ka);
     for(const s of shifts) await DB.validateShift(s.id,currentSession);
     setSyncStatus('ok','● En ligne'); this.renderPage();
   },
