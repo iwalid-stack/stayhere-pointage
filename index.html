@@ -2545,8 +2545,9 @@ const App = {
       const ws=DB.getWeeklySchedule(e.id,date);
       return !ws?.is_off; // si is_off=true → jour de repos planifié → ne pas afficher
     });
-    const shifts=DB.getShifts(this.currentSite, date);
-
+    // On ne filtre PAS par site_id ici : un shift pointé via GPS peut avoir
+    // un site_id différent du site assigné à l'employé (site GPS le plus proche).
+    // On cherche donc par employé+date, indépendamment du site.
     const siteSelector=isKA?`<strong style="color:var(--text-muted)">${site?.nom||''}</strong>`:`<select onchange="App.changeSite(this.value)" style="max-width:220px">${sites.map(s=>`<option value="${s.id}" ${s.id===this.currentSite?'selected':''}>${s.nom}</option>`).join('')}</select>`;
 
     // Demandes en attente sur ce site / cette date
@@ -2554,7 +2555,7 @@ const App = {
 
     const rows=employees.map(emp=>{
       const schedule=DB.getSchedule(emp.id);
-      const shift=shifts.find(s=>s.employee_id===emp.id)||null;
+      const shift=DB.getShiftByEmpDate(emp.id,date); // cherche par emp+date, pas par site
       const statut=DB.shiftStatut(shift,schedule);
       const statutLabels={complet:'Complet',incomplet:'Incomplet',en_cours:'En cours',vide:'—'};
       // KA peut soumettre des demandes ; admins peuvent modifier directement
@@ -2761,12 +2762,11 @@ const App = {
         return !ws?.is_off; // exclure si jour OFF dans le planning semaine
       });
       if(!emps.length) return;
-      const siteShifts=DB.getShifts(site.id,date);
       const lock=DB.getLock(site.id,date.substring(0,7));
       let sEnCours=0,sComplet=0,sVide=0;
       const rows=emps.map(emp=>{
         const schedule=DB.getSchedule(emp.id);
-        const shift=siteShifts.find(s=>s.employee_id===emp.id)||null;
+        const shift=DB.getShiftByEmpDate(emp.id,date); // cherche par emp+date, pas par site
         const statut=DB.shiftStatut(shift,schedule);
         if(statut==='en_cours') {sEnCours++;gEnCours++;}
         else if(statut==='complet'){sComplet++;gComplet++;}
