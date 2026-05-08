@@ -261,7 +261,7 @@ Deno.serve(async (req: Request) => {
             Number(latitude), Number(longitude),
             Number(site.latitude), Number(site.longitude)
           );
-          const radius = site.geofence_radius ?? 50;
+          const radius = (site.geofence_radius != null ? Number(site.geofence_radius) : 0) || 100;
           if (dist <= radius && dist < closestDist) {
             closestDist = dist;
             closestSite = site;
@@ -278,7 +278,8 @@ Deno.serve(async (req: Request) => {
               Number(latitude), Number(longitude),
               Number(site.latitude), Number(site.longitude)
             );
-            if (dist < minDist) { minDist = dist; minRadius = site.geofence_radius ?? 50; }
+            const siteRadius = (site.geofence_radius != null ? Number(site.geofence_radius) : 0) || 100;
+          if (dist < minDist) { minDist = dist; minRadius = siteRadius; }
           }
           const siteCount = sitesToCheck.length;
           const msg = siteCount > 1

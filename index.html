@@ -50,8 +50,19 @@ body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;bac
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* LOGIN */
-.login-page{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,var(--primary) 0%,#3a3a34 100%)}
-.login-card{background:var(--surface);border-radius:16px;padding:48px 40px;width:400px;box-shadow:0 20px 60px rgba(0,0,0,0.3)}
+.login-page{display:flex;min-height:100vh;background:#272724}
+.login-left{flex:0 0 420px;background:#008160;display:flex;flex-direction:column;justify-content:space-between;padding:48px 44px;position:relative;overflow:hidden}
+.login-left::before{content:'';position:absolute;top:-80px;right:-80px;width:280px;height:280px;border-radius:50%;background:rgba(255,255,255,0.06)}
+.login-left::after{content:'';position:absolute;bottom:-60px;left:-60px;width:200px;height:200px;border-radius:50%;background:rgba(0,0,0,0.08)}
+.login-brand{position:relative;z-index:1}
+.login-brand-tagline{margin-top:28px;font-size:22px;font-weight:700;color:#F6F7EA;line-height:1.3;letter-spacing:-0.02em}
+.login-brand-sub{margin-top:8px;font-size:14px;color:rgba(246,247,234,0.6);font-weight:400}
+.login-brand-footer{position:relative;z-index:1;font-size:12px;color:rgba(246,247,234,0.4)}
+.login-right{flex:1;display:flex;align-items:center;justify-content:center;padding:40px}
+.login-card{background:#F6F7EA;border-radius:20px;padding:44px 40px;width:100%;max-width:380px}
+.login-card-title{font-size:20px;font-weight:700;color:#272724;margin-bottom:4px;letter-spacing:-0.02em}
+.login-card-sub{font-size:13px;color:#27272480;margin-bottom:32px}
+@media(max-width:700px){.login-left{display:none}.login-right{padding:24px}.login-card{padding:32px 24px}}
 .login-logo{text-align:center;margin-bottom:32px}
 .login-logo h1{font-size:28px;font-weight:700;color:var(--primary)}
 .login-logo p{color:var(--text-muted);font-size:13px;margin-top:4px}
@@ -1673,18 +1684,65 @@ const App = {
   // ---- LOGIN ----
   showLogin() {
     document.body.innerHTML=`
-    <div class="login-page"><div class="login-card">
-      <div class="login-logo">
-        <h1><span class="logo-circle">●</span> StayHere <span class="logo-triangle">▲</span></h1>
-        <p>Système de Pointage — Gestion RH</p>
+    <div class="login-page">
+      <!-- Panneau gauche vert -->
+      <div class="login-left">
+        <div class="login-brand">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 501 90" style="width:180px;height:auto">
+            <g fill="#F6F7EA">
+              <path d="M201.9,21.8L216.4,63l14.9-41.3h8L219.1,75c-4.1,10.7-6.8,14.2-15.5,14.2h-5.7v-6.4h4c5.6,0,7.3-1.1,10.7-10.4l-19.1-50.6H201.9z"/>
+              <path d="M166.4,73.5c-9.8,0-17.7-5.6-17.7-15.4c0-10.4,8-13,20.7-16.5c8-2.2,13.5-3.3,13.5-7.7c0-4-4-7.1-11.5-7.1S159,30,158.4,36.5h-8c1.3-9,8.7-15.7,21.1-15.7c12.1,0,19.2,5.5,19.2,15.2v36.4h-7.4v-9.4C181.4,68.8,175.9,73.5,166.4,73.5z M168.1,67.6c9.7,0,15.2-8.3,15.2-17.6V40c-1.4,3.2-5.3,4.9-11.7,6.6c-8.7,2.4-14.5,4.8-14.5,11.5C157.1,64.3,161.8,67.6,168.1,67.6z"/>
+              <path d="M146.9,28.1h-11.1v31.4c0,5,0.7,6.4,5.1,6.4h6v6.3h-8c-8.6,0-10.8-4-10.8-12.3V28.1h-7.9v-6.3h7.9V8.3h7.7v13.5h11.1V28.1z"/>
+              <path d="M450.2,47.1c0-5,1.1-9.5,3.2-13.5c2.2-4,5.2-7.1,9-9.3c3.9-2.3,8.4-3.5,13.5-3.5c5.2,0,9.7,1.3,13.5,3.8c3.9,2.5,6.8,6,8.8,10.4c2,4.4,3,9.3,2.8,14.9h-37.9c0.3,4.6,1.5,8.3,3.8,10.9c2.3,2.6,5.4,3.9,9.3,3.9c3,0,5.4-0.8,7.2-2.3c1.9-1.5,3.2-3.5,4.1-6H500c-1.5,5.2-4.3,9.3-8.4,12.5c-4.1,3.2-9.3,4.8-15.5,4.8c-5.1,0-9.6-1.1-13.5-3.4c-3.9-2.3-6.9-5.5-9.1-9.5C451.3,56.6,450.2,52.1,450.2,47.1z M488.3,42c-0.6-3.8-2-6.8-4.2-9c-2.1-2.2-4.9-3.4-8.2-3.4c-3.4,0-6.2,1.1-8.4,3.4c-2.1,2.2-3.4,5.2-4,9H488.3z"/>
+              <path d="M451.5,21.8v11.3h-4.9c-4.4,0-7.7,1-9.8,3.1c-2.1,2-3.2,5.6-3.3,10.5v25.7h-12.5V21.8h12.2v9.4c1.1-2.8,2.8-5,5.3-6.7c2.5-1.8,5.7-2.7,9.5-2.7H451.5z"/>
+              <path d="M365.9,47.1c0-5,1.1-9.5,3.2-13.5c2.2-4,5.2-7.1,9-9.3c3.9-2.3,8.4-3.5,13.5-3.5c5.2,0,9.7,1.3,13.5,3.8c3.9,2.5,6.8,6,8.8,10.4c2.1,4.4,3,9.3,2.8,14.9h-37.9c0.3,4.6,1.5,8.3,3.8,10.9c2.3,2.6,5.4,3.9,9.3,3.9c3,0,5.4-0.8,7.2-2.3c1.9-1.5,3.2-3.5,4.1-6h12.5c-1.5,5.2-4.3,9.3-8.4,12.5c-4.1,3.2-9.3,4.8-15.5,4.8c-5.1,0-9.6-1.1-13.5-3.4c-3.9-2.3-6.9-5.5-9.1-9.5C367,56.6,365.9,52.1,365.9,47.1z M404,42c-0.6-3.8-2-6.8-4.2-9c-2.1-2.2-4.9-3.4-8.2-3.4c-3.4,0-6.2,1.1-8.4,3.4c-2.1,2.2-3.4,5.2-4,9H404z"/>
+              <path d="M75,33.8c3.6,1.8,7.9,3,12.5,4.3c0.4,0.1,0.8,0.2,1.2,0.4c1.4,0.4,2.7,0.8,4,1.1C103.2,42.5,110,44.4,110,53c0,8.7-7,13-17,13c-12,0-19.2-4.3-21.1-14.5c-1.4,3.4-3.3,6.5-5.6,9.3c4.4,7.7,13,12.7,26.4,12.7c15.1,0,25.9-7.7,25.9-20.5c0-14.4-11.8-17.7-25-21.3c-0.4-0.1-0.8-0.2-1.2-0.3c-0.2,0-0.3-0.1-0.5-0.1C81.6,28.5,74.1,26.4,74.1,19c0-6.7,6.5-10.7,15.8-10.7c10.5,0,17.9,3.9,19.3,12.9h8.3c-2-12.1-11.1-20.4-27.7-20.4c-10.7,0-19.3,4.4-22.8,11.4C71.7,18.2,74.5,25.7,75,33.8z"/>
+              <path d="M303.4,43.2l12.7-7.3l-12.7-7.3V1.9H317V30h30.3V1.9h13.6v70.4h-13.6V41.8H317v30.5h-13.6V43.2z"/>
+            </g>
+            <circle fill="rgba(246,247,234,0.25)" cx="35.4" cy="36" r="35.1"/>
+            <path fill="#FF622C" d="M306.8,35.9l-60.7,35v-70L306.8,35.9z"/>
+          </svg>
+          <div class="login-brand-tagline">Gestion du Pointage RH</div>
+          <div class="login-brand-sub">Suivez vos équipes en temps réel,<br>où que vous soyez.</div>
+        </div>
+        <div class="login-brand-footer">© StayHere ${new Date().getFullYear()} · Système interne</div>
       </div>
-      <div id="login-error" class="alert alert-danger hidden"></div>
-      <form id="login-form">
-        <div class="form-group"><label>Identifiant</label><input type="text" id="un" placeholder="Votre identifiant" autocomplete="username" required></div>
-        <div class="form-group"><label>Mot de passe</label><input type="password" id="pw" placeholder="••••••••" autocomplete="current-password" required></div>
-        <button type="submit" class="btn btn-primary w-full" style="justify-content:center;margin-top:8px">Se connecter</button>
-      </form>
-    </div></div>`;
+      <!-- Panneau droit formulaire -->
+      <div class="login-right">
+        <div class="login-card">
+          <div style="margin-bottom:28px">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 501 90" style="width:120px;height:auto;margin-bottom:16px">
+              <g fill="#272724">
+                <path d="M201.9,21.8L216.4,63l14.9-41.3h8L219.1,75c-4.1,10.7-6.8,14.2-15.5,14.2h-5.7v-6.4h4c5.6,0,7.3-1.1,10.7-10.4l-19.1-50.6H201.9z"/>
+                <path d="M166.4,73.5c-9.8,0-17.7-5.6-17.7-15.4c0-10.4,8-13,20.7-16.5c8-2.2,13.5-3.3,13.5-7.7c0-4-4-7.1-11.5-7.1S159,30,158.4,36.5h-8c1.3-9,8.7-15.7,21.1-15.7c12.1,0,19.2,5.5,19.2,15.2v36.4h-7.4v-9.4C181.4,68.8,175.9,73.5,166.4,73.5z M168.1,67.6c9.7,0,15.2-8.3,15.2-17.6V40c-1.4,3.2-5.3,4.9-11.7,6.6c-8.7,2.4-14.5,4.8-14.5,11.5C157.1,64.3,161.8,67.6,168.1,67.6z"/>
+                <path d="M146.9,28.1h-11.1v31.4c0,5,0.7,6.4,5.1,6.4h6v6.3h-8c-8.6,0-10.8-4-10.8-12.3V28.1h-7.9v-6.3h7.9V8.3h7.7v13.5h11.1V28.1z"/>
+                <path d="M450.2,47.1c0-5,1.1-9.5,3.2-13.5c2.2-4,5.2-7.1,9-9.3c3.9-2.3,8.4-3.5,13.5-3.5c5.2,0,9.7,1.3,13.5,3.8c3.9,2.5,6.8,6,8.8,10.4c2,4.4,3,9.3,2.8,14.9h-37.9c0.3,4.6,1.5,8.3,3.8,10.9c2.3,2.6,5.4,3.9,9.3,3.9c3,0,5.4-0.8,7.2-2.3c1.9-1.5,3.2-3.5,4.1-6H500c-1.5,5.2-4.3,9.3-8.4,12.5c-4.1,3.2-9.3,4.8-15.5,4.8c-5.1,0-9.6-1.1-13.5-3.4c-3.9-2.3-6.9-5.5-9.1-9.5C451.3,56.6,450.2,52.1,450.2,47.1z M488.3,42c-0.6-3.8-2-6.8-4.2-9c-2.1-2.2-4.9-3.4-8.2-3.4c-3.4,0-6.2,1.1-8.4,3.4c-2.1,2.2-3.4,5.2-4,9H488.3z"/>
+                <path d="M451.5,21.8v11.3h-4.9c-4.4,0-7.7,1-9.8,3.1c-2.1,2-3.2,5.6-3.3,10.5v25.7h-12.5V21.8h12.2v9.4c1.1-2.8,2.8-5,5.3-6.7c2.5-1.8,5.7-2.7,9.5-2.7H451.5z"/>
+                <path d="M365.9,47.1c0-5,1.1-9.5,3.2-13.5c2.2-4,5.2-7.1,9-9.3c3.9-2.3,8.4-3.5,13.5-3.5c5.2,0,9.7,1.3,13.5,3.8c3.9,2.5,6.8,6,8.8,10.4c2.1,4.4,3,9.3,2.8,14.9h-37.9c0.3,4.6,1.5,8.3,3.8,10.9c2.3,2.6,5.4,3.9,9.3,3.9c3,0,5.4-0.8,7.2-2.3c1.9-1.5,3.2-3.5,4.1-6h12.5c-1.5,5.2-4.3,9.3-8.4,12.5c-4.1,3.2-9.3,4.8-15.5,4.8c-5.1,0-9.6-1.1-13.5-3.4c-3.9-2.3-6.9-5.5-9.1-9.5C367,56.6,365.9,52.1,365.9,47.1z M404,42c-0.6-3.8-2-6.8-4.2-9c-2.1-2.2-4.9-3.4-8.2-3.4c-3.4,0-6.2,1.1-8.4,3.4c-2.1,2.2-3.4,5.2-4,9H404z"/>
+                <path d="M75,33.8c3.6,1.8,7.9,3,12.5,4.3c0.4,0.1,0.8,0.2,1.2,0.4c1.4,0.4,2.7,0.8,4,1.1C103.2,42.5,110,44.4,110,53c0,8.7-7,13-17,13c-12,0-19.2-4.3-21.1-14.5c-1.4,3.4-3.3,6.5-5.6,9.3c4.4,7.7,13,12.7,26.4,12.7c15.1,0,25.9-7.7,25.9-20.5c0-14.4-11.8-17.7-25-21.3c-0.4-0.1-0.8-0.2-1.2-0.3c-0.2,0-0.3-0.1-0.5-0.1C81.6,28.5,74.1,26.4,74.1,19c0-6.7,6.5-10.7,15.8-10.7c10.5,0,17.9,3.9,19.3,12.9h8.3c-2-12.1-11.1-20.4-27.7-20.4c-10.7,0-19.3,4.4-22.8,11.4C71.7,18.2,74.5,25.7,75,33.8z"/>
+                <path d="M303.4,43.2l12.7-7.3l-12.7-7.3V1.9H317V30h30.3V1.9h13.6v70.4h-13.6V41.8H317v30.5h-13.6V43.2z"/>
+              </g>
+              <circle fill="#008160" cx="35.4" cy="36" r="35.1"/>
+              <path fill="#FF622C" d="M306.8,35.9l-60.7,35v-70L306.8,35.9z"/>
+            </svg>
+            <div class="login-card-title">Connexion</div>
+            <div class="login-card-sub">Accès réservé au personnel StayHere</div>
+          </div>
+          <div id="login-error" class="alert alert-danger hidden"></div>
+          <form id="login-form">
+            <div class="form-group">
+              <label style="color:#272724;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Identifiant</label>
+              <input type="text" id="un" placeholder="Votre identifiant" autocomplete="username" required style="background:white;border-color:#deded4">
+            </div>
+            <div class="form-group">
+              <label style="color:#272724;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Mot de passe</label>
+              <input type="password" id="pw" placeholder="••••••••" autocomplete="current-password" required style="background:white;border-color:#deded4">
+            </div>
+            <button type="submit" class="btn btn-primary w-full" style="justify-content:center;margin-top:8px;padding:12px;font-size:14px;background:#FF622C;border-radius:10px">Se connecter</button>
+          </form>
+        </div>
+      </div>
+    </div>`;
     document.getElementById('login-form').addEventListener('submit', async e => {
       e.preventDefault();
       const username = document.getElementById('un').value.trim().toLowerCase();
@@ -1891,6 +1949,7 @@ const App = {
             });
           }
         }
+        if(this.currentPage==='home') this.renderHome();
       })
       .on('postgres_changes',{event:'UPDATE',schema:'public',table:'sh_users'}, async (payload)=>{
         // Mise à jour ciblée du cache (évite de recharger tous les users)
@@ -2785,6 +2844,15 @@ const App = {
   async saveDepart(empId, date, shiftNum=1) {
     const heure=document.getElementById('heure-depart').value;
     if(!heure){alert('Heure requise.');return;}
+    // Protection : avertir si on ferme un shift actif d'aujourd'hui (collaborateur peut être encore connecté)
+    if(shiftNum===1 && date===todayStr()) {
+      const shift=DB.getShiftByEmpDate(empId,date);
+      if(shift?.heure_arrivee && !shift?.heure_depart) {
+        const emp=DB.getEmployees().find(e=>e.id===empId);
+        const ok=confirm(`⚠️ Attention — Ce shift est actuellement en cours.\n\n${emp?.prenom||''} ${emp?.nom||''} est peut-être encore connecté(e) sur l'app mobile.\n\nForcer la clôture à ${heure} ?`);
+        if(!ok) return;
+      }
+    }
     setSyncStatus('busy','↻ Sauvegarde...');
     try {
       if(shiftNum===2) await DB.pointageDepart2(empId,date,heure,currentSession);
@@ -2959,7 +3027,7 @@ const App = {
         } else if(entry){
           if(entry.type==='double'){
             bg=`background:var(--double-bg)`;
-            label=`<div style="line-height:1.2"><span style="color:var(--double);font-weight:800;font-size:12px">2×</span><div style="font-size:9px;color:var(--double);margin-top:2px">08h–00h</div></div>`;
+            label=`<div style="line-height:1.2"><span style="color:var(--double);font-weight:800;font-size:12px">2×</span><div style="font-size:9px;color:var(--double);margin-top:2px">09h–23h</div></div>`;
           } else if(entry.type==='off'){
             bg=`background:var(--off-bg)`;
             label=`<span style="color:var(--off);font-weight:700;font-size:11px">OFF</span>`;
