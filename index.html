@@ -2153,19 +2153,10 @@ const App = {
     const sites=DB.getSites().filter(s=>s.actif);
     const allEmps=DB.getEmployees().filter(e=>e.actif);
 
-    // Pointage du jour (tous sites)
-    const todayEntries=[];
-    for(const s of sites){
-      const ym=today.substring(0,7);
-      const [y,m]=ym.split('-').map(Number);
-      const rows=DB.getPointage(s.id,y,m);
-      for(const row of rows){
-        const v=row[today];
-        if(v) todayEntries.push({siteId:s.id,empId:row.employee_id,type:v});
-      }
-    }
-    const travCount=todayEntries.filter(e=>e.type==='T').length;
-    const absCount=todayEntries.filter(e=>['A','M','AM'].includes(e.type)).length;
+    // Pointage du jour — lecture directe du cache (date exacte = aujourd'hui)
+    const todayEntries=(Cache.pointage||[]).filter(p=>p.date===today);
+    const travCount=todayEntries.filter(p=>['travaille','double'].includes(p.type)).length;
+    const absCount=todayEntries.filter(p=>['absence','maladie','at'].includes(p.type)).length;
 
     // Shifts en cours
     const nowTs=Date.now();
@@ -2264,8 +2255,7 @@ const App = {
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
           ${sites.map(s=>{
             const siteTodayEmps=allEmps.filter(e=>DB.getEffectiveSiteId(e.id,today)===s.id&&e.actif);
-            const sitePointage=DB.getPointage(s.id,new Date().getFullYear(),new Date().getMonth()+1);
-            const sitePresent=sitePointage.filter(r=>r[today]==='T').length;
+            const sitePresent=(Cache.pointage||[]).filter(p=>p.site_id===s.id&&p.date===today&&['travaille','double'].includes(p.type)).length;
             return `<div onclick="App.changeSite('${s.id}');App.navigate('pointage')" style="cursor:pointer;background:var(--surface);border-radius:10px;padding:14px;border:1px solid var(--border);transition:border-color .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
               <div style="font-weight:700;font-size:13px;color:var(--text);margin-bottom:4px">${s.nom}</div>
               <div style="font-size:12px;color:var(--text-muted)"><span style="color:var(--accent-green);font-weight:700">${sitePresent}</span> présents · ${siteTodayEmps.length} total</div>
