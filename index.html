@@ -993,12 +993,14 @@ const DB = {
     if(existing) {
       const oldType=existing.type;
       existing.type=type; existing.notes=notes||''; existing.updated_by=session.username; existing.updated_at=now;
-      await SB.from('sh_pointage').update({type,notes:notes||'',updated_by:session.username,updated_at:now}).eq('id',existing.id);
+      const {error:updErr}=await SB.from('sh_pointage').update({type,notes:notes||'',updated_by:session.username,updated_at:now}).eq('id',existing.id);
+      if(updErr){existing.type=oldType;existing.notes=existing.notes;existing.updated_by=null;existing.updated_at=null;throw new Error('Erreur sauvegarde : '+updErr.message);}
       await this.addAudit('update',existing.id,session.username,{type:oldType},{type},effectiveSiteId);
     } else {
       const entry={id:uid(),employee_id:empId,site_id:effectiveSiteId,date,type,notes:notes||'',created_by:session.username,created_at:now,updated_by:null,updated_at:null,validated:false,validated_by:null,validated_at:null};
       Cache.pointage.push(entry);
-      await SB.from('sh_pointage').insert(entry);
+      const {error:insErr}=await SB.from('sh_pointage').insert(entry);
+      if(insErr){Cache.pointage=Cache.pointage.filter(p=>p.id!==entry.id);throw new Error('Erreur sauvegarde : '+insErr.message);}
       await this.addAudit('create',entry.id,session.username,null,{type},effectiveSiteId);
     }
   },
@@ -1006,7 +1008,8 @@ const DB = {
     const p=Cache.pointage.find(x=>x.id===id); if(!p)return;
     const now=nowISO();
     p.validated=true; p.validated_by=session.username; p.validated_at=now;
-    await SB.from('sh_pointage').update({validated:true,validated_by:session.username,validated_at:now}).eq('id',id);
+    const {error:vErr}=await SB.from('sh_pointage').update({validated:true,validated_by:session.username,validated_at:now}).eq('id',id);
+    if(vErr){p.validated=false;p.validated_by=null;p.validated_at=null;throw new Error('Erreur validation : '+vErr.message);}
     await this.addAudit('validate',id,session.username,null,null,p.site_id);
   },
   async deletePointage(empId, date, session) {
