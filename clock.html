@@ -187,6 +187,7 @@ function pad2(n) { return String(n).padStart(2,'0'); }
 function uid() { return Date.now().toString(36)+Math.random().toString(36).substr(2,5); }
 function nowISO() { return new Date().toISOString(); }
 function todayStr() { const n=new Date(); return `${n.getFullYear()}-${pad2(n.getMonth()+1)}-${pad2(n.getDate())}`; }
+function yesterdayStr() { const n=new Date(Date.now()-86400000); return `${n.getFullYear()}-${pad2(n.getMonth()+1)}-${pad2(n.getDate())}`; }
 function timeNow() { const n=new Date(); return pad2(n.getHours())+':'+pad2(n.getMinutes()); }
 
 function fmtMinutes(min) {
@@ -544,7 +545,8 @@ const ClockApp = {
       if(employee) {
         const [schedData, shiftData, holData, balData, reqData, ptData, siteData] = await Promise.all([
           SB.from('sh_schedules').select('*').eq('employee_id',employee.id),
-          SB.from('sh_shifts').select('*').eq('employee_id',employee.id).eq('date',todayStr()),
+          // Cherche le shift d'aujourd'hui ET d'hier (pour les shifts overnight ex: 20h→08h)
+          SB.from('sh_shifts').select('*').eq('employee_id',employee.id).in('date',[todayStr(),yesterdayStr()]),
           SB.from('sh_holidays').select('date'),
           SB.from('sh_leave_balances').select('*').eq('employee_id',employee.id),
           SB.from('sh_leave_requests').select('*').eq('employee_id',employee.id).order('created_at',{ascending:false}),
@@ -554,7 +556,11 @@ const ClockApp = {
             : Promise.resolve({data:null}),
         ]);
         schedule = schedData.data?.[0] || null;
-        todayShift = shiftData.data?.[0] || null;
+        // Priorité : shift du jour → sinon shift d'hier encore ouvert (overnight)
+        const todayShifts = shiftData.data || [];
+        const shiftToday = todayShifts.find(s=>s.date===todayStr())||null;
+        const shiftYest  = todayShifts.find(s=>s.date===yesterdayStr()&&s.heure_arrivee&&!s.heure_depart)||null;
+        todayShift = shiftToday || shiftYest;
         allHolidays = (holData.data||[]).map(h=>h.date);
         leaveBalance = balData.data?.[0] || null;
         leaveRequests = reqData.data || [];
@@ -591,10 +597,11 @@ const ClockApp = {
 
   getElapsedMins() {
     if(!todayShift?.heure_arrivee) return 0;
-    const today = todayStr();
+    // Utiliser la date du SHIFT (pas todayStr()) pour gérer les shifts overnight
+    const shiftDate = todayShift.date || todayStr();
     const [ah,am] = todayShift.heure_arrivee.split(':').map(Number);
-    const arrMs = new Date(today+'T'+pad2(ah)+':'+pad2(am)+':00').getTime();
-    const workedMs = Math.max(0, Date.now()-arrMs) - getTotalPauseMs();
+    const arrMs = new Date(shiftDate+'T'+pad2(ah)+':'+pad2(am)+':00').getTime();
+    const workedMs = Date.now() - arrMs - getTotalPauseMs();
     return Math.max(0, Math.floor(workedMs/60000));
   },
 
@@ -619,7 +626,13 @@ const ClockApp = {
   // ---- RING DISPLAY ----
   getRingConfig() {
     const status=this.getStatus();
-    const schedDur = schedule ? timeToMins(schedule.heure_fin)-timeToMins(schedule.heure_debut) : 480;
+    // Durée prévue : gère l'overnight (ex 20:00→08:00 = 720 min, pas -720)
+    let schedDur = 480;
+    if(schedule) {
+      let d = timeToMins(schedule.heure_fin)-timeToMins(schedule.heure_debut);
+      if(d<=0) d+=1440; // overnight : passage minuit
+      schedDur = d;
+    }
 
     if(status==='not_started') {
       const cd=this.getCountdown();
