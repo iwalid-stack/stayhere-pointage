@@ -402,6 +402,22 @@ const Cache = {
 };
 let currentSession = null;
 
+// Charge toutes les lignes d'une table en paginant par lots de 1000
+// → aucune limite hard-codée, fonctionne quelle que soit la taille de la table
+async function fetchAllRows(queryBuilder) {
+  const PAGE = 1000;
+  let all = [], from = 0;
+  while (true) {
+    const { data, error } = await queryBuilder.range(from, from + PAGE - 1);
+    if (error) return { data: all.length ? all : null, error };
+    if (!data || !data.length) break;
+    all = all.concat(data);
+    if (data.length < PAGE) break; // dernière page incomplète → terminé
+    from += PAGE;
+  }
+  return { data: all, error: null };
+}
+
 async function loadAll() {
   const [users, sites, affRows, employees, holidays, pointage, locks, audit, shifts, schedules, postes, roles, leaveReqs, leaveBals, tempAssign, shiftTypes, weeklyScheds, userProfiles] = await Promise.all([
     SB.from('sh_users').select('*'),
@@ -409,10 +425,10 @@ async function loadAll() {
     SB.from('sh_affectations').select('*'),
     SB.from('sh_employees').select('*'),
     SB.from('sh_holidays').select('*'),
-    SB.from('sh_pointage').select('*').order('date',{ascending:false}).limit(5000),
+    fetchAllRows(SB.from('sh_pointage').select('*').order('date',{ascending:false})),
     SB.from('sh_locks').select('*'),
     SB.from('sh_audit').select('*').order('created_at',{ascending:false}).limit(300),
-    SB.from('sh_shifts').select('*').order('date',{ascending:false}).limit(2000),
+    fetchAllRows(SB.from('sh_shifts').select('*').order('date',{ascending:false})),
     SB.from('sh_schedules').select('*'),
     SB.from('sh_postes').select('*').order('nom'),
     SB.from('sh_roles').select('*'),
@@ -465,7 +481,7 @@ async function loadAll() {
 }
 
 async function refreshPointage() {
-  const {data,error} = await SB.from('sh_pointage').select('*').order('date',{ascending:false}).limit(5000);
+  const {data,error} = await fetchAllRows(SB.from('sh_pointage').select('*').order('date',{ascending:false}));
   if(error || !data) return; // ne pas écraser le cache si la requête échoue
   // Merge smart : mise à jour des entrées existantes + ajout des nouvelles
   // Les entrées locales récemment créées (pas encore visibles en DB) sont conservées
