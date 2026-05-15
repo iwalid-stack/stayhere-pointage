@@ -427,7 +427,7 @@ async function loadAll() {
     SB.from('sh_holidays').select('*'),
     fetchAllRows(SB.from('sh_pointage').select('*').order('date',{ascending:false})),
     SB.from('sh_locks').select('*'),
-    SB.from('sh_audit').select('*').order('created_at',{ascending:false}).limit(300),
+    fetchAllRows(SB.from('sh_audit').select('*').order('created_at',{ascending:false})),
     fetchAllRows(SB.from('sh_shifts').select('*').order('date',{ascending:false})),
     SB.from('sh_schedules').select('*'),
     SB.from('sh_postes').select('*').order('nom'),
