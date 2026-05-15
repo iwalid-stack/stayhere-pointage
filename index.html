@@ -991,15 +991,33 @@ const DB = {
     const now=nowISO();
 
     if(existing) {
-      const oldType=existing.type;
+      const oldType=existing.type; const oldNotes=existing.notes;
       existing.type=type; existing.notes=notes||''; existing.updated_by=session.username; existing.updated_at=now;
-      const {error:updErr}=await SB.from('sh_pointage').update({type,notes:notes||'',updated_by:session.username,updated_at:now}).eq('id',existing.id);
-      if(updErr){existing.type=oldType;existing.notes=existing.notes;existing.updated_by=null;existing.updated_at=null;throw new Error('Erreur sauvegarde : '+updErr.message);}
+      // UPDATE par id ET fallback upsert si la ligne n'existe pas en DB (cache désynchronisé)
+      const {data:updData,error:updErr}=await SB.from('sh_pointage').update({type,notes:notes||'',updated_by:session.username,updated_at:now}).eq('id',existing.id).select();
+      if(updErr){existing.type=oldType;existing.notes=oldNotes;existing.updated_by=null;existing.updated_at=null;throw new Error('Erreur sauvegarde : '+updErr.message);}
+      // Si 0 lignes mises à jour → l'id en cache ne correspond pas à la DB (désync)
+      // → on update par (employee_id, date) et on resync l'id dans le cache
+      if(!updData||updData.length===0){
+        const {data:fbData,error:fbErr}=await SB.from('sh_pointage')
+          .update({type,notes:notes||'',updated_by:session.username,updated_at:now})
+          .eq('employee_id',empId).eq('date',date).select();
+        if(fbErr){existing.type=oldType;existing.notes=oldNotes;throw new Error('Erreur sauvegarde : '+fbErr.message);}
+        if(fbData&&fbData[0]) existing.id=fbData[0].id; // resync id cache ↔ DB
+        // Si toujours rien en DB → INSERT via upsert (entrée n'existe pas du tout en DB)
+        if(!fbData||fbData.length===0){
+          const newEntry={id:uid(),employee_id:empId,site_id:effectiveSiteId,date,type,notes:notes||'',created_by:session.username,created_at:now,updated_by:session.username,updated_at:now,validated:false,validated_by:null,validated_at:null};
+          const {error:newErr}=await SB.from('sh_pointage').upsert(newEntry,{onConflict:'employee_id,date'});
+          if(newErr){existing.type=oldType;existing.notes=oldNotes;throw new Error('Erreur sauvegarde : '+newErr.message);}
+          existing.id=newEntry.id;
+        }
+      }
       await this.addAudit('update',existing.id,session.username,{type:oldType},{type},effectiveSiteId);
     } else {
       const entry={id:uid(),employee_id:empId,site_id:effectiveSiteId,date,type,notes:notes||'',created_by:session.username,created_at:now,updated_by:null,updated_at:null,validated:false,validated_by:null,validated_at:null};
       Cache.pointage.push(entry);
-      const {error:insErr}=await SB.from('sh_pointage').insert(entry);
+      // upsert sur (employee_id, date) pour éviter les violations UNIQUE si l'entrée existe déjà en DB
+      const {error:insErr}=await SB.from('sh_pointage').upsert(entry,{onConflict:'employee_id,date',ignoreDuplicates:false});
       if(insErr){Cache.pointage=Cache.pointage.filter(p=>p.id!==entry.id);throw new Error('Erreur sauvegarde : '+insErr.message);}
       await this.addAudit('create',entry.id,session.username,null,{type},effectiveSiteId);
     }
