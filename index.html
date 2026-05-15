@@ -409,7 +409,7 @@ async function loadAll() {
     SB.from('sh_affectations').select('*'),
     SB.from('sh_employees').select('*'),
     SB.from('sh_holidays').select('*'),
-    SB.from('sh_pointage').select('*'),
+    SB.from('sh_pointage').select('*').order('date',{ascending:false}).limit(5000),
     SB.from('sh_locks').select('*'),
     SB.from('sh_audit').select('*').order('created_at',{ascending:false}).limit(300),
     SB.from('sh_shifts').select('*').order('date',{ascending:false}).limit(2000),
@@ -465,7 +465,7 @@ async function loadAll() {
 }
 
 async function refreshPointage() {
-  const {data,error} = await SB.from('sh_pointage').select('*');
+  const {data,error} = await SB.from('sh_pointage').select('*').order('date',{ascending:false}).limit(5000);
   if(error || !data) return; // ne pas écraser le cache si la requête échoue
   // Merge smart : mise à jour des entrées existantes + ajout des nouvelles
   // Les entrées locales récemment créées (pas encore visibles en DB) sont conservées
