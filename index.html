@@ -459,8 +459,14 @@ async function loadAll() {
 }
 
 async function refreshPointage() {
-  const {data} = await SB.from('sh_pointage').select('*');
-  Cache.pointage = data||[];
+  const {data,error} = await SB.from('sh_pointage').select('*');
+  if(error || !data) return; // ne pas écraser le cache si la requête échoue
+  // Merge smart : mise à jour des entrées existantes + ajout des nouvelles
+  // Les entrées locales récemment créées (pas encore visibles en DB) sont conservées
+  const dbMap = new Map(data.map(p=>[p.id,p]));
+  // Mettre à jour / supprimer les entrées déjà en DB
+  const localOnly = Cache.pointage.filter(p=>!dbMap.has(p.id));
+  Cache.pointage = [...localOnly, ...data];
 }
 
 // ============================================================
