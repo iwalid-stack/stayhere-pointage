@@ -980,10 +980,12 @@ const DB = {
     return e;
   },
   getPointageByEmpDate(empId, date) { return Cache.pointage.find(p=>p.employee_id===empId&&p.date===date)||null; },
-  async setPointage(empId, date, type, notes, session) {
+  async setPointage(empId, date, type, notes, session, siteIdHint=null) {
     const emp=Cache.employees.find(e=>e.id===empId); if(!emp) return;
     // Site effectif : temporaire si affectation active, sinon site permanent
-    const effectiveSiteId=this.getEffectiveSiteId(empId, date);
+    // siteIdHint (currentSite) utilisé comme fallback si la résolution historique échoue
+    const effectiveSiteId=this.getEffectiveSiteId(empId, date) || siteIdHint || emp.site_id || null;
+    if(!effectiveSiteId) throw new Error(`Site introuvable pour ${emp.prenom} ${emp.nom}. Vérifiez son profil collaborateur.`);
     const lock=this.getLock(effectiveSiteId, date.substring(0,7));
     if(lock) throw new Error(`Mois ${date.substring(0,7)} verrouillé.`);
 
@@ -1030,9 +1032,10 @@ const DB = {
     if(vErr){p.validated=false;p.validated_by=null;p.validated_at=null;throw new Error('Erreur validation : '+vErr.message);}
     await this.addAudit('validate',id,session.username,null,null,p.site_id);
   },
-  async deletePointage(empId, date, session) {
+  async deletePointage(empId, date, session, siteIdHint=null) {
     const emp=Cache.employees.find(e=>e.id===empId);
-    const lock=this.getLock(emp?.site_id, date.substring(0,7));
+    const siteForLock=this.getEffectiveSiteId(empId,date)||siteIdHint||emp?.site_id;
+    const lock=this.getLock(siteForLock, date.substring(0,7));
     if(lock) throw new Error('Mois verrouillé.');
     const entry=Cache.pointage.find(p=>p.employee_id===empId&&p.date===date);
     if(entry) {
@@ -2498,13 +2501,13 @@ const App = {
   async saveSaisie(empId,date){
     if(!this._saisieType){const e=document.getElementById('saisie-error');e.textContent='Veuillez sélectionner un type.';e.classList.remove('hidden');return;}
     setSyncStatus('busy','↻ Sauvegarde...');
-    try{await DB.setPointage(empId,date,this._saisieType,document.getElementById('saisie-notes')?.value||'',currentSession);setSyncStatus('ok','● En ligne');this.closeModal();this.renderPage();}
-    catch(e){setSyncStatus('error','⚠ Erreur');const err=document.getElementById('saisie-error');err.textContent=e.message;err.classList.remove('hidden');}
+    try{await DB.setPointage(empId,date,this._saisieType,document.getElementById('saisie-notes')?.value||'',currentSession,this.currentSite);setSyncStatus('ok','● En ligne');this.closeModal();this.renderPage();}
+    catch(e){setSyncStatus('error','⚠ Erreur');const err=document.getElementById('saisie-error');if(err){err.textContent=e.message;err.classList.remove('hidden');}}
   },
   async deletePointage(empId,date){
     if(!confirm('Supprimer cette entrée ?'))return;
     setSyncStatus('busy','↻ Suppression...');
-    try{await DB.deletePointage(empId,date,currentSession);setSyncStatus('ok','● En ligne');this.closeModal();this.renderPage();}
+    try{await DB.deletePointage(empId,date,currentSession,this.currentSite);setSyncStatus('ok','● En ligne');this.closeModal();this.renderPage();}
     catch(e){setSyncStatus('error','⚠ Erreur');alert(e.message);}
   },
   prevMonth(){if(this.currentMonth===0){this.currentMonth=11;this.currentYear--;}else this.currentMonth--;this.renderPointage();},
