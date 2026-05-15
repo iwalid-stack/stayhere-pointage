@@ -83,19 +83,24 @@ $$;
 DROP POLICY IF EXISTS "site_read_pointage" ON sh_pointage;
 DROP POLICY IF EXISTS "own_read_pointage" ON sh_pointage;
 
--- Nouvelle politique unifiée :
--- • Les rôles globaux voient TOUT le pointage
--- • Les managers de site voient le pointage de leur site
+-- Nouvelle politique unifiée — cohérente avec manager_write_pointage :
+-- La politique d'ÉCRITURE autorise tous les managers à écrire SANS restriction de site.
+-- La politique de LECTURE doit être identique sinon les entrées disparaissent au rechargement.
+--
+-- • Tous les managers (cluster_ops, juriste, KA, gouvernante, etc.) voient TOUT le pointage
+--   → Cohérent avec le fait qu'ils peuvent tous écrire partout
 -- • Les collaborateurs voient uniquement leur propre pointage
 CREATE POLICY "site_read_pointage" ON sh_pointage
   FOR SELECT TO authenticated
   USING (
-    -- Vérification inline du rôle global (ne dépend pas de sh_is_global())
+    -- Tous les managers autorisés à saisir du pointage peuvent aussi le lire
+    -- (même liste que manager_write_pointage)
     (SELECT role FROM sh_user_profiles WHERE id = auth.uid())
-      IN ('cluster_ops', 'juriste', 'responsable_financier')
-    -- Managers de site : entrées du même site que leur profil
-    OR site_id = (SELECT site_id FROM sh_user_profiles WHERE id = auth.uid())
-    -- Tout utilisateur voit son propre pointage (via employee_id)
+      IN (
+        'cluster_ops', 'juriste', 'responsable_financier',
+        'kindness_ambassador', 'gouvernante_generale', 'assistante_gouvernante'
+      )
+    -- Collaborateurs : leur propre pointage uniquement
     OR employee_id = (SELECT employee_id FROM sh_user_profiles WHERE id = auth.uid())
   );
 
@@ -106,12 +111,15 @@ CREATE POLICY "site_read_pointage" ON sh_pointage
 DROP POLICY IF EXISTS "site_read_shifts" ON sh_shifts;
 DROP POLICY IF EXISTS "own_read_shifts" ON sh_shifts;
 
+-- Même logique que pointage : managers voient tous les shifts, collaborateurs les leurs
 CREATE POLICY "site_read_shifts" ON sh_shifts
   FOR SELECT TO authenticated
   USING (
     (SELECT role FROM sh_user_profiles WHERE id = auth.uid())
-      IN ('cluster_ops', 'juriste', 'responsable_financier')
-    OR site_id = (SELECT site_id FROM sh_user_profiles WHERE id = auth.uid())
+      IN (
+        'cluster_ops', 'juriste', 'responsable_financier',
+        'kindness_ambassador', 'gouvernante_generale', 'assistante_gouvernante'
+      )
     OR employee_id = (SELECT employee_id FROM sh_user_profiles WHERE id = auth.uid())
   );
 
