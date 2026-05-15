@@ -442,6 +442,12 @@ async function loadAll() {
   Cache.affectations = (affRows.data||[]).map(r=>r.nom);
   Cache.employees = employees.data||[];
   Cache.holidays = holidays.data||[];
+  // Log RLS diagnostics si le pointage semble vide/incomplet
+  if(pointage.error) {
+    console.error('[loadAll] Erreur chargement pointage:', pointage.error);
+  } else if(pointage.data && pointage.data.length === 0 && (employees.data||[]).length > 0) {
+    console.warn('[loadAll] Pointage retourne 0 entrée mais', (employees.data||[]).length, 'employés existent — vérifier la politique RLS site_read_pointage');
+  }
   Cache.pointage = pointage.data||[];
   Cache.locks = locks.data||[];
   Cache.audit = audit.data||[];
@@ -1025,8 +1031,16 @@ const DB = {
       const entry={id:uid(),employee_id:empId,site_id:effectiveSiteId,date,type,notes:notes||'',created_by:session.username,created_at:now,updated_by:null,updated_at:null,validated:false,validated_by:null,validated_at:null};
       Cache.pointage.push(entry);
       // upsert sur (employee_id, date) pour éviter les violations UNIQUE si l'entrée existe déjà en DB
-      const {error:insErr}=await SB.from('sh_pointage').upsert(entry,{onConflict:'employee_id,date',ignoreDuplicates:false});
+      const {data:insData,error:insErr}=await SB.from('sh_pointage').upsert(entry,{onConflict:'employee_id,date',ignoreDuplicates:false}).select();
       if(insErr){Cache.pointage=Cache.pointage.filter(p=>p.id!==entry.id);throw new Error('Erreur sauvegarde : '+insErr.message);}
+      // Si l'upsert a retourné l'entrée, on resync l'id en cache (peut avoir changé si conflit ON CONFLICT)
+      if(insData&&insData[0]){entry.id=insData[0].id;Object.assign(entry,insData[0]);}
+      // Vérification RLS : si l'entrée vient d'être sauvée mais n'est pas retournée par SELECT, c'est un problème RLS
+      else {
+        const {data:chk}=await SB.from('sh_pointage').select('id').eq('employee_id',empId).eq('date',date).maybeSingle();
+        if(!chk) console.warn('[setPointage] AVERTISSEMENT: entrée sauvée mais non visible en SELECT → vérifier politique RLS site_read_pointage (site_id:',effectiveSiteId,')');
+        else if(chk.id!==entry.id) entry.id=chk.id; // resync id
+      }
       await this.addAudit('create',entry.id,session.username,null,{type},effectiveSiteId);
     }
   },
