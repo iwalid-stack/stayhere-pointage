@@ -1924,7 +1924,7 @@ const App = {
           ${this.canGererRotation()?`<div class="nav-item" data-page="rotation" onclick="App.navigate('rotation')"><span class="icon">🔄</span> Shifts rotatifs</div>`:''}
           ${this.canGlobal()?`<div class="nav-item" data-page="synthese" onclick="App.navigate('synthese')"><span class="icon">📊</span> Synthèse globale</div>`:''}
           ${this.canValidate()?`<div class="nav-item" data-page="validation" onclick="App.navigate('validation')"><span class="icon">✅</span> Validation</div>`:''}
-          ${(this.canValidate()||this.canManage())?`<div class="nav-item" data-page="conges" onclick="App.navigate('conges')"><span class="icon">🏖</span> Congés & RECUP</div>`:''}
+          ${this.canManageConges()?`<div class="nav-item" data-page="conges" onclick="App.navigate('conges')"><span class="icon">🏖</span> Congés & RECUP</div>`:''}
           ${this.canManage()?`
           <div class="nav-section">Administration</div>
           <div class="nav-item" data-page="collaborateurs" onclick="App.navigate('collaborateurs')"><span class="icon">👥</span> Collaborateurs</div>
@@ -2108,6 +2108,7 @@ const App = {
   canGlobal()   { return this._perm('voir_tous_sites'); },
   canValidate() { return this._perm('valider'); },
   canManage()   { return this._perm('administrer'); },
+  canManageConges() { return this.canValidate() || this.canManage() || currentSession?.role==='kindness_ambassador'; },
   canLock()     { return this._perm('verrouiller'); },
   canExport()              { return this._perm('exporter'); },
   canVoirEquipe()          { return this._perm('voir_equipe'); },
@@ -2219,8 +2220,11 @@ const App = {
     // Validations en attente (demandes de modification de shift)
     const pendingValidations=(Cache.shiftChangeRequests||[]).filter(p=>p.status==='pending').length;
 
-    // Congés en attente
-    const pendingLeaves=(Cache.leaveRequests||[]).filter(r=>r.status==='pending').length;
+    // Congés en attente (adapté selon le rôle)
+    const isKADash = currentSession?.role==='kindness_ambassador';
+    const pendingLeaves = isKADash
+      ? (Cache.leaveRequests||[]).filter(r=>r.status==='pending_ka'&&r.site_id===currentSession.site_id).length
+      : (Cache.leaveRequests||[]).filter(r=>r.status==='pending_ka'||r.status==='pending_admin').length;
 
     // Connexions utilisateurs
     const users=Cache.users||[];
@@ -2237,7 +2241,7 @@ const App = {
       quickLinks.push({icon:'👥',label:'Collaborateurs',page:'collaborateurs',color:'#0277bd'});
     if(this.canManage())
       quickLinks.push({icon:'🔐',label:'Utilisateurs',page:'utilisateurs',color:'#c07000'});
-    if(this.canValidate()||this.canManage())
+    if(this.canManageConges())
       quickLinks.push({icon:'🏖',label:'Congés & RECUP',page:'conges',color:'#558b2f'});
 
     // Alerte validations
