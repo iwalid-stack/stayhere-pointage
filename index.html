@@ -1572,10 +1572,12 @@ const DB = {
     await SB.from('sh_shifts').update({validated_by_ka:session.username,validated_at_ka:now}).eq('id',shiftId);
     await this.addAudit('validate_shift',shiftId,session.username,null,null,shift.site_id);
     // Auto-créer "travaillé" dans sh_pointage si le shift a une heure d'arrivée et qu'aucune entrée n'existe
+    // Utiliser le site_id de l'employé (pas celui du shift) pour que la saisie du pointage s'affiche correctement
     if(shift.heure_arrivee) {
       const existing=Cache.pointage.find(p=>p.employee_id===shift.employee_id&&p.date===shift.date);
       if(!existing) {
-        try { await this.setPointage(shift.employee_id,shift.date,'travaille','Pointage horaire validé',session,shift.site_id); }
+        const empSiteId=this.getEffectiveSiteId(shift.employee_id,shift.date)||shift.site_id;
+        try { await this.setPointage(shift.employee_id,shift.date,'travaille','Pointage horaire validé',session,empSiteId); }
         catch(e){/* ignore lock ou autre erreur — le KA peut saisir manuellement */}
       }
     }
@@ -3350,12 +3352,20 @@ const App = {
     try {
       if(!type) {
         await DB.deletePointage(empId,date,currentSession);
+        await this._clearPlannedShift(empId,date); // supprimer le shift prévu si aucun pointage réel
       } else if(type==='double') {
         await DB.setPointage(empId,date,'double','Double shift (planning)',currentSession);
         await this._upsertDoubleShift(empId,date,emp);
+      } else if(type==='travaille') {
+        await DB.setPointage(empId,date,'travaille','Planning manuel',currentSession);
+        await this._upsertRegularShift(empId,date,emp); // créer shift prévu avec horaires employé
+      } else if(type==='off') {
+        await DB.setPointage(empId,date,'off','Jour de repos (planning)',currentSession);
+        await this._clearPlannedShift(empId,date); // retirer le shift prévu (pas de pointage)
       } else {
-        const notes={travaille:'Planning manuel',off:'Jour de repos (planning)',conge:'Congé (planning)',recup:'Récupération (planning)',maladie:'Maladie (planning)'}[type]||'Planning';
+        const notes={conge:'Congé (planning)',recup:'Récupération (planning)',maladie:'Maladie (planning)'}[type]||'Planning';
         await DB.setPointage(empId,date,type,notes,currentSession);
+        await this._clearPlannedShift(empId,date);
       }
       setSyncStatus('ok','● En ligne');
     } catch(e) {
@@ -3389,6 +3399,41 @@ const App = {
         });
       }
     } catch(e) { console.warn('_upsertDoubleShift:', e); }
+  },
+
+  async _upsertRegularShift(empId, date, emp) {
+    // Crée/met à jour sh_shifts avec les horaires prévus de l'employé (depuis sh_schedules)
+    if(!emp) emp=DB.getEmployees().find(e=>e.id===empId);
+    if(!emp) return;
+    const schedule=DB.getSchedule(emp.id);
+    const debut=schedule?.heure_debut||'09:00';
+    const fin=schedule?.heure_fin||'17:00';
+    try {
+      const {data:existing}=await SB.from('sh_shifts').select('id,heure_arrivee').eq('employee_id',empId).eq('date',date);
+      const shift=existing?.[0];
+      if(shift) {
+        // Mettre à jour uniquement les horaires prévus — ne pas écraser un pointage déjà saisi
+        await SB.from('sh_shifts').update({heure_debut_prevue:debut,heure_fin_prevue:fin,updated_by:currentSession.username,updated_at:nowISO()}).eq('id',shift.id);
+      } else {
+        await SB.from('sh_shifts').insert({
+          id:uid(),employee_id:empId,site_id:emp.site_id,date,
+          heure_arrivee:null,heure_depart:null,
+          heure_debut_prevue:debut,heure_fin_prevue:fin,
+          retard_minutes:0,duree_minutes:0,pause_minutes:0,
+          validated_by_ka:null,validated_at_ka:null,
+          created_by:currentSession.username,created_at:nowISO(),updated_by:null,updated_at:null
+        });
+      }
+    } catch(e) { console.warn('_upsertRegularShift:', e); }
+  },
+
+  async _clearPlannedShift(empId, date) {
+    // Supprime le shift prévu seulement s'il n'a pas encore été pointé (pas d'heure d'arrivée)
+    try {
+      const {data:existing}=await SB.from('sh_shifts').select('id,heure_arrivee').eq('employee_id',empId).eq('date',date);
+      const shift=existing?.[0];
+      if(shift&&!shift.heure_arrivee) await SB.from('sh_shifts').delete().eq('id',shift.id);
+    } catch(e) { console.warn('_clearPlannedShift:', e); }
   },
 
   async setOffDay(empId, date) {
