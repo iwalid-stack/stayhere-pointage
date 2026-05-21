@@ -1476,10 +1476,26 @@ const DB = {
   calcRECUP(empId) {
     const bal=this.getLeaveBalance(empId);
     const initial=Number(bal?.recup_initial||0);
+    // 1. Jours fériés travaillés → +1 RECUP chacun
     const holidays=Cache.holidays.map(h=>h.date);
     const feries=Cache.pointage.filter(p=>p.employee_id===empId&&holidays.includes(p.date)&&['travaille','double'].includes(p.type)).length;
+    // 2. Double Shifts > 4 par période (26 M-1 → 25 M) → excédent converti en RECUP
+    const DS_SEUIL=4;
+    const dsEntries=Cache.pointage.filter(p=>p.employee_id===empId&&p.type==='double');
+    const dsByPeriod={};
+    dsEntries.forEach(p=>{
+      const d=new Date(p.date+'T12:00:00');
+      const y=d.getFullYear(),m=d.getMonth(),day=d.getDate();
+      // Si jour >= 26 : appartient à la période du mois suivant
+      let pk;
+      if(day>=26){const nm=m===11?0:m+1,ny=m===11?y+1:y;pk=`${ny}-${String(nm+1).padStart(2,'0')}`;}
+      else{pk=`${y}-${String(m+1).padStart(2,'0')}`;}
+      dsByPeriod[pk]=(dsByPeriod[pk]||0)+1;
+    });
+    const dsRecup=Object.values(dsByPeriod).reduce((sum,n)=>sum+Math.max(0,n-DS_SEUIL),0);
     const pris=Cache.leaveRequests.filter(r=>r.employee_id===empId&&r.type==='recup'&&r.status==='approved').reduce((s,r)=>s+Number(r.nb_jours||0),0);
-    return {initial,acquis:feries,pris,solde:Math.max(0,initial+feries-pris)};
+    const acquis=feries+dsRecup;
+    return {initial,acquis,acquis_feries:feries,acquis_ds:dsRecup,pris,solde:Math.max(0,initial+acquis-pris)};
   },
 
   // Nombre de jours ouvrés (hors dimanche + fériés) entre deux dates
@@ -5114,13 +5130,15 @@ const App = {
         const site=DB.getSiteById(emp.site_id);
         const cpBadge=`<span class="lp-cp leave-type-pill" style="font-size:12px">${cp.solde} j</span>`;
         const recupBadge=`<span class="lp-recup leave-type-pill" style="font-size:12px">${recup.solde} j</span>`;
+        const recupDetail=recup.acquis_ds>0?`<span style="font-size:10px;color:var(--text-muted);margin-left:4px">(${recup.acquis_feries}j fériés + ${recup.acquis_ds}j DS)</span>`
+          :`<span style="font-size:10px;color:var(--text-muted);margin-left:4px">${recup.acquis_feries}j fériés</span>`;
         return `<tr data-name="${(emp.prenom+' '+emp.nom).toLowerCase()}">
           <td><strong>${emp.prenom} ${emp.nom}</strong></td>
           <td class="text-muted text-sm">${emp.poste}</td>
           <td class="text-muted text-sm">${site?.nom||'—'}</td>
           <td>${cpBadge}</td>
           <td>${recupBadge}</td>
-          <td class="text-muted text-sm">${recup.acquis} j</td>
+          <td class="text-muted text-sm">${recup.acquis} j ${recupDetail}</td>
           <td><button class="btn btn-ghost btn-xs" onclick="App.congesEditBalance('${emp.id}')">✎ Modifier</button></td>
         </tr>`;
       }).join('');
