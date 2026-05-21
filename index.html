@@ -5226,7 +5226,8 @@ const App = {
           <div style="font-size:11px;font-weight:700;color:var(--recup);text-transform:uppercase;letter-spacing:0.5px">Jours RECUP disponibles</div>
           <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.6">
             Antérieur : <strong>${recup.initial} j</strong><br>
-            Fériés travaillés : <strong>${recup.acquis} j</strong><br>
+            Fériés travaillés : <strong>${recup.acquis_feries} j</strong><br>
+            DS excédentaires (>4/période) : <strong>${recup.acquis_ds} j</strong><br>
             Pris (approuvés) : <strong>${recup.pris} j</strong>
           </div>
         </div>
