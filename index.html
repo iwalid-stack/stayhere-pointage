@@ -1571,6 +1571,14 @@ const DB = {
     shift.validated_by_ka=session.username; shift.validated_at_ka=now;
     await SB.from('sh_shifts').update({validated_by_ka:session.username,validated_at_ka:now}).eq('id',shiftId);
     await this.addAudit('validate_shift',shiftId,session.username,null,null,shift.site_id);
+    // Auto-créer "travaillé" dans sh_pointage si le shift a une heure d'arrivée et qu'aucune entrée n'existe
+    if(shift.heure_arrivee) {
+      const existing=Cache.pointage.find(p=>p.employee_id===shift.employee_id&&p.date===shift.date);
+      if(!existing) {
+        try { await this.setPointage(shift.employee_id,shift.date,'travaille','Pointage horaire validé',session,shift.site_id); }
+        catch(e){/* ignore lock ou autre erreur — le KA peut saisir manuellement */}
+      }
+    }
   },
 
   // SYNTHESE
