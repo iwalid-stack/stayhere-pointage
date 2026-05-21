@@ -2108,7 +2108,7 @@ const App = {
   canGlobal()   { return this._perm('voir_tous_sites'); },
   canValidate() { return this._perm('valider'); },
   canManage()   { return this._perm('administrer'); },
-  canManageConges() { return this.canValidate() || this.canManage() || currentSession?.role==='kindness_ambassador'; },
+  canManageConges() { const r=currentSession?.role; return this.canValidate()||this.canManage()||r==='kindness_ambassador'||r==='gouvernante_generale'||r==='assistante_gouvernante'||r==='cluster_revenue_manager'; },
   canLock()     { return this._perm('verrouiller'); },
   canExport()              { return this._perm('exporter'); },
   canVoirEquipe()          { return this._perm('voir_equipe'); },
@@ -2222,7 +2222,8 @@ const App = {
 
     // Congés en attente (adapté selon le rôle)
     const isKADash = currentSession?.role==='kindness_ambassador';
-    const pendingLeaves = isKADash
+    const isGovDash = ['gouvernante_generale','assistante_gouvernante'].includes(currentSession?.role);
+    const pendingLeaves = (isKADash||isGovDash)
       ? (Cache.leaveRequests||[]).filter(r=>r.status==='pending_ka'&&r.site_id===currentSession.site_id).length
       : (Cache.leaveRequests||[]).filter(r=>r.status==='pending_ka'||r.status==='pending_admin').length;
 
@@ -4956,8 +4957,10 @@ const App = {
 
   renderConges() {
     const isKA = currentSession.role==='kindness_ambassador';
+    const isGouvernante = ['gouvernante_generale','assistante_gouvernante'].includes(currentSession.role);
     const isAdmin = this.canManage();
     const isClusterOps = currentSession.role==='cluster_ops';
+    const isClusterRevenue = currentSession.role==='cluster_revenue_manager';
     const activeTab = this._congesTab||'pending';
 
     const fmtDate = ds => { if(!ds)return'—'; const[y,m,d]=ds.split('-'); return`${d}/${m}/${y}`; };
@@ -4978,19 +4981,19 @@ const App = {
 
     // --- Filtrage des demandes selon le rôle ---
     let pendingReqs = [];
-    if(isKA) {
-      // KA : voit les demandes de son site en attente de sa validation
+    if(isKA || isGouvernante) {
+      // KA / Gouvernante : voit les demandes de son site en attente de validation KA
       pendingReqs = Cache.leaveRequests.filter(r=>r.site_id===currentSession.site_id&&r.status==='pending_ka');
-    } else if(isAdmin) {
-      // Admin : voit les demandes en attente d'admin (déjà validées par KA)
-      pendingReqs = isClusterOps
+    } else if(isAdmin || isClusterRevenue) {
+      // Admin / Cluster Revenue : voit les demandes en attente (cluster_ops et cluster_revenue voient tout)
+      pendingReqs = (isClusterOps||isClusterRevenue)
         ? Cache.leaveRequests.filter(r=>r.status==='pending_ka'||r.status==='pending_admin')
         : Cache.leaveRequests.filter(r=>r.status==='pending_admin');
     }
 
     // --- Historique ---
     const sites = DB.getSites().filter(s=>s.actif);
-    let histReqs = isKA
+    let histReqs = (isKA||isGouvernante)
       ? Cache.leaveRequests.filter(r=>r.site_id===currentSession.site_id)
       : Cache.leaveRequests;
     histReqs = [...histReqs].sort((a,b)=>b.created_at.localeCompare(a.created_at));
@@ -5001,8 +5004,8 @@ const App = {
       const rows = pendingReqs.map(r=>{
         const emp = DB.getEmployees().find(e=>e.id===r.employee_id);
         const site = DB.getSiteById(r.site_id);
-        const showKABtn = (isKA || isClusterOps) && r.status==='pending_ka';
-        const showAdminBtn = isAdmin && (r.status==='pending_admin' || (isClusterOps&&r.status==='pending_ka'));
+        const showKABtn = (isKA||isGouvernante||isClusterOps||isClusterRevenue) && r.status==='pending_ka';
+        const showAdminBtn = (isAdmin||isClusterRevenue) && (r.status==='pending_admin'||((isClusterOps||isClusterRevenue)&&r.status==='pending_ka'));
         return `<tr>
           <td><strong>${empName(emp)}</strong><div style="font-size:11px;color:var(--text-muted)">${site?.nom||r.site_id}</div></td>
           <td>${typeBadge(r.type)}</td>
@@ -5085,7 +5088,7 @@ const App = {
           À valider ${pendingReqs.length>0?`<span style="background:var(--accent);color:white;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:4px">${pendingReqs.length}</span>`:''}
         </button>
         <button class="leave-tab-btn ${activeTab==='history'?'active':''}" onclick="App._congesTab='history';App.renderConges()">Historique</button>
-        ${isAdmin?`<button class="leave-tab-btn ${activeTab==='soldes'?'active':''}" onclick="App._congesTab='soldes';App.renderConges()">Soldes</button>`:''}
+        ${(isAdmin||isClusterRevenue)?`<button class="leave-tab-btn ${activeTab==='soldes'?'active':''}" onclick="App._congesTab='soldes';App.renderConges()">Soldes</button>`:''}
       </div>
       ${tabContent}`;
   },
