@@ -5101,36 +5101,38 @@ const App = {
         <tbody>${rows}</tbody></table></div>`;
     };
 
-    // --- Onglet "Soldes" (admin uniquement) ---
+    // --- Onglet "Soldes" ---
     const renderSoldes = () => {
-      if(!isAdmin) return `<div class="alert alert-info">Accès réservé aux administrateurs.</div>`;
+      if(!isAdmin&&!isClusterRevenue) return `<div class="alert alert-info">Accès réservé aux administrateurs.</div>`;
       const emps = this.canGlobal()
         ? DB.getEmployees().filter(e=>e.actif)
         : DB.getEmployees(currentSession.site_id).filter(e=>e.actif);
-      const cards = emps.map(emp=>{
-        const cp = DB.calcCP(emp.id);
-        const recup = DB.calcRECUP(emp.id);
-        const bal = DB.getLeaveBalance(emp.id);
-        const site = DB.getSiteById(emp.site_id);
-        return `<div class="balance-card-admin">
-          <div class="bal-name">${emp.prenom} ${emp.nom}</div>
-          <div class="bal-sub">${emp.poste}${site?' · '+site.nom:''}</div>
-          <div class="bal-row"><span class="bal-label">CP disponible</span><span class="bal-val bal-cp">${cp.solde} j</span></div>
-          <div class="bal-row"><span class="bal-label">CP initial</span><span class="bal-val">${cp.initial} j</span></div>
-          <div class="bal-row"><span class="bal-label">CP acquis (auto)</span><span class="bal-val">${cp.acquis} j</span></div>
-          <div class="bal-row"><span class="bal-label">CP pris</span><span class="bal-val">${cp.pris} j</span></div>
-          <div class="bal-row" style="margin-top:4px"><span class="bal-label">RECUP disponible</span><span class="bal-val bal-recup">${recup.solde} j</span></div>
-          <div class="bal-row"><span class="bal-label">RECUP initial</span><span class="bal-val">${recup.initial} j</span></div>
-          <div class="bal-row"><span class="bal-label">Fériés travaillés</span><span class="bal-val">${recup.acquis} j</span></div>
-          <div class="bal-row"><span class="bal-label">RECUP pris</span><span class="bal-val">${recup.pris} j</span></div>
-          <div class="bal-row"><span class="bal-label" style="font-size:11px">Réf. date accrual</span><span style="font-size:11px;color:var(--text-muted)">${bal?.date_reference||'Non définie'}</span></div>
-          <button class="btn btn-secondary btn-sm" style="width:100%;margin-top:10px;justify-content:center" onclick="App.congesEditBalance('${emp.id}')">✎ Modifier le solde</button>
-        </div>`;
+      const searchId='soldes-search-'+Date.now();
+      const tableId='soldes-table-'+Date.now();
+      const rows = emps.map(emp=>{
+        const cp=DB.calcCP(emp.id); const recup=DB.calcRECUP(emp.id);
+        const site=DB.getSiteById(emp.site_id);
+        const cpBadge=`<span class="lp-cp leave-type-pill" style="font-size:12px">${cp.solde} j</span>`;
+        const recupBadge=`<span class="lp-recup leave-type-pill" style="font-size:12px">${recup.solde} j</span>`;
+        return `<tr data-name="${(emp.prenom+' '+emp.nom).toLowerCase()}">
+          <td><strong>${emp.prenom} ${emp.nom}</strong></td>
+          <td class="text-muted text-sm">${emp.poste}</td>
+          <td class="text-muted text-sm">${site?.nom||'—'}</td>
+          <td>${cpBadge}</td>
+          <td>${recupBadge}</td>
+          <td class="text-muted text-sm">${recup.acquis} j</td>
+          <td><button class="btn btn-ghost btn-xs" onclick="App.congesEditBalance('${emp.id}')">✎ Modifier</button></td>
+        </tr>`;
       }).join('');
-      return `<div class="alert alert-info" style="margin-bottom:16px">
-        <strong>Règles automatiques :</strong> +1,5 j CP par mois entier travaillé (depuis la date de référence) · Jours fériés travaillés → RECUP automatiquement
-      </div>
-      <div class="balance-grid">${cards||'<p class="text-muted">Aucun collaborateur actif.</p>'}</div>`;
+      return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <input id="${searchId}" type="text" placeholder="🔍 Rechercher un collaborateur..." style="flex:1;max-width:360px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text)"
+            oninput="document.querySelectorAll('#${tableId} tr[data-name]').forEach(r=>r.style.display=this.value&&!r.dataset.name.includes(this.value.toLowerCase())?'none':'')">
+          <span class="text-muted text-sm">${emps.length} collaborateurs</span>
+        </div>
+        <div class="table-wrapper"><table class="data-table" id="${tableId}">
+          <thead><tr><th>Collaborateur</th><th>Poste</th><th>Site</th><th style="color:var(--conge)">CP dispo</th><th style="color:var(--recup)">RECUP dispo</th><th>Fériés travaillés</th><th>Action</th></tr></thead>
+          <tbody>${rows||'<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px">Aucun collaborateur actif.</td></tr>'}</tbody>
+        </table></div>`;
     };
 
     const tabContent = {pending:renderPending, history:renderHistory, soldes:renderSoldes}[activeTab]?.() || '';
