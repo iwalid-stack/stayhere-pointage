@@ -2508,6 +2508,7 @@ const App = {
       <div class="grid-controls">
         ${siteSelector}
         <div class="month-nav"><button onclick="App.prevMonth()">‹</button><span>${fmtPeriod(this.currentYear,this.currentMonth)}</span><button onclick="App.nextMonth()">›</button></div>
+        ${!lock&&this.canVoirEquipe()?`<button class="btn btn-primary btn-sm" onclick="App.genererPeriode()" title="Remplir toutes les cellules vides de la période avec Présent (hors fériés)">⚡ Générer la période</button>`:''}
         ${lock?`<div class="lock-indicator">🔒 Verrouillé par ${lock.locked_by}</div>`:''}
       </div>
       <div class="legend">${legend}</div>
@@ -3424,6 +3425,30 @@ const App = {
     }
     setSyncStatus('ok','● En ligne');
     this.renderPlanning();
+  },
+
+  async genererPeriode() {
+    const employees=this._getVisibleEmps(this.currentSite);
+    const dates=getPeriodDates(this.currentYear,this.currentMonth);
+    // Ne compter que les cellules vraiment vides (hors fériés, hors verrous)
+    const vides=[];
+    for(const emp of employees) {
+      for(const date of dates) {
+        if(DB.isHoliday(date)) continue;
+        if(DB.getLock(emp.site_id,date.substring(0,7))) continue;
+        if(DB.getPointageByEmpDate(emp.id,date)) continue;
+        vides.push({emp,date});
+      }
+    }
+    if(!vides.length){alert('Aucune cellule vide à remplir sur cette période.');return;}
+    if(!confirm(`Générer le pointage pour ${employees.length} collaborateur(s) ?\n\n${vides.length} cellule(s) vide(s) seront remplies avec "Présent".\nLes jours déjà saisis ne seront pas modifiés.`)) return;
+    setSyncStatus('busy',`↻ Génération (${vides.length} cellules)...`);
+    for(const {emp,date} of vides) {
+      try { await DB.setPointage(emp.id,date,'travaille','Planning automatique',currentSession); }
+      catch(e){ console.warn('genererPeriode skip',emp.id,date,e.message); }
+    }
+    setSyncStatus('ok','● En ligne');
+    this.renderPointage();
   },
 
   // ---- SHIFTS ROTATIFS ----
