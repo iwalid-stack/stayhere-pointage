@@ -1615,6 +1615,8 @@ const DB = {
     emps.forEach(emp=>{
       result[emp.id]={emp,totals:{}};
       TYPES.forEach(t=>{ result[emp.id].totals[t.key]=entries.filter(p=>p.employee_id===emp.id&&p.type===t.key).length; });
+      // Un Double Shift compte aussi comme 1 jour travaillé
+      result[emp.id].totals['travaille']=(result[emp.id].totals['travaille']||0)+(result[emp.id].totals['double']||0);
     });
     return result;
   },
@@ -1630,6 +1632,8 @@ const DB = {
         TYPES.forEach(t=>result[p.employee_id].totals[t.key]=0);
       }
       result[p.employee_id].totals[p.type]=(result[p.employee_id].totals[p.type]||0)+1;
+      // Un Double Shift compte aussi comme 1 jour travaillé
+      if(p.type==='double') result[p.employee_id].totals['travaille']=(result[p.employee_id].totals['travaille']||0)+1;
       if(!result[p.employee_id].sites.includes(p.site_id)) result[p.employee_id].sites.push(p.site_id);
     });
     // Aussi inclure les employés actifs du site sans entrées ce mois (pour cohérence)
@@ -1673,7 +1677,8 @@ const DB = {
     filtered.forEach(({emp,totals,sites})=>{
       const siteNames=sites.map(sid=>this.getSiteById(sid)?.nom||sid).join(' / ');
       const typeCols=typeKeys.map(k=>totals[k]||0).join(';');
-      const total=typeKeys.reduce((s,k)=>s+(totals[k]||0),0);
+      // Double shift compte comme 1 travaillé + 1 DS → on soustrait double pour éviter double-comptage
+      const total=typeKeys.reduce((s,k)=>s+(totals[k]||0),0)-(totals['double']||0);
       csv+=`"${emp.imm||''}";"${emp.societe||''}";"${siteNames}";"${emp.affectation||''}";"${emp.nom} ${emp.prenom}";"${emp.poste}";${typeCols};${total}\n`;
     });
     return csv;
