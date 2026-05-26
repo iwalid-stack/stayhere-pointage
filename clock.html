@@ -608,18 +608,28 @@ const ClockApp = {
 
   getPausedMins() { return Math.floor(getTotalPauseMs()/60000); },
 
+  // Horaires prévus effectifs : priorité au shift pré-rempli (rotation), sinon schedule fixe
+  getPlannedDebut() {
+    return todayShift?.heure_debut_prevue || schedule?.heure_debut || null;
+  },
+  getPlannedFin() {
+    return todayShift?.heure_fin_prevue || schedule?.heure_fin || null;
+  },
+
   getRetardMins() {
-    if(!schedule||!todayShift?.heure_arrivee) return 0;
-    const [sh,sm]=schedule.heure_debut.split(':').map(Number);
+    const debut=this.getPlannedDebut();
+    if(!debut||!todayShift?.heure_arrivee) return 0;
+    const [sh,sm]=debut.split(':').map(Number);
     const [ah,am]=todayShift.heure_arrivee.split(':').map(Number);
     return Math.max(0,(ah*60+am)-(sh*60+sm));
   },
 
   getCountdown() {
-    if(!schedule) return null;
+    const debut=this.getPlannedDebut();
+    if(!debut) return null;
     const now=new Date();
     const nowMins=now.getHours()*60+now.getMinutes();
-    const [sh,sm]=schedule.heure_debut.split(':').map(Number);
+    const [sh,sm]=debut.split(':').map(Number);
     const startMins=sh*60+sm;
     return startMins-nowMins; // Positive = minutes until start, negative = late
   },
@@ -627,10 +637,12 @@ const ClockApp = {
   // ---- RING DISPLAY ----
   getRingConfig() {
     const status=this.getStatus();
-    // Durée prévue : gère l'overnight (ex 20:00→08:00 = 720 min, pas -720)
+    // Durée prévue : priorité aux horaires du shift (rotation), sinon schedule fixe
+    // Gère l'overnight (ex 20:00→08:00 = 720 min, pas -720)
     let schedDur = 480;
-    if(schedule) {
-      let d = timeToMins(schedule.heure_fin)-timeToMins(schedule.heure_debut);
+    const debut=this.getPlannedDebut(), fin=this.getPlannedFin();
+    if(debut&&fin) {
+      let d = timeToMins(fin)-timeToMins(debut);
       if(d<=0) d+=1440; // overnight : passage minuit
       schedDur = d;
     }
@@ -670,8 +682,9 @@ const ClockApp = {
     const status=this.getStatus();
     const empName=employee?`${employee.prenom} ${employee.nom}`:session.nom;
     const empSub=employee?employee.poste:session.username;
-    const schedLine=schedule
-      ?`Planning : <strong>${schedule.heure_debut} → ${schedule.heure_fin}</strong>`
+    const _pDebut=this.getPlannedDebut(), _pFin=this.getPlannedFin();
+    const schedLine=_pDebut&&_pFin
+      ?`Planning : <strong>${_pDebut} → ${_pFin==='00:00'?'Minuit':_pFin}</strong>`
       :'<span style="color:rgba(255,165,0,0.6)">Aucun planning configuré</span>';
 
     const now=new Date();
@@ -945,8 +958,9 @@ const ClockApp = {
         const status = this.getStatus();
         const now = new Date();
         const dateLabel = `${DAY_FR[now.getDay()]} ${now.getDate()} ${MON_FR[now.getMonth()]} ${now.getFullYear()}`;
-        const schedLine = schedule
-          ?`Planning : <strong>${schedule.heure_debut} → ${schedule.heure_fin}</strong>`
+        const _pD=this.getPlannedDebut(),_pF=this.getPlannedFin();
+        const schedLine = _pD&&_pF
+          ?`Planning : <strong>${_pD} → ${_pF==='00:00'?'Minuit':_pF}</strong>`
           :'<span style="color:rgba(255,165,0,0.6)">Aucun planning configuré</span>';
         const CIRC=283;
         const retard=this.getRetardMins();

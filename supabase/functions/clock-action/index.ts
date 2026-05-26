@@ -179,7 +179,7 @@ Deno.serve(async (req: Request) => {
     let rotationShiftFin: string | null   = null;
 
     if (employee.has_rotation && action === 'start') {
-      // Récupérer le shift prévu pour aujourd'hui
+      // Récupérer le shift prévu pour aujourd'hui depuis sh_weekly_schedule
       const { data: weeklyEntry } = await sbAdmin
         .from('sh_weekly_schedule')
         .select('shift_type_id, is_off')
@@ -187,21 +187,15 @@ Deno.serve(async (req: Request) => {
         .eq('date', today)
         .maybeSingle();
 
-      if (!weeklyEntry) {
-        return Response.json(
-          { error: 'Aucun shift programmé pour aujourd\'hui. Contactez votre responsable.' },
-          { status: 403, headers: corsHeaders }
-        );
-      }
-
-      if (weeklyEntry.is_off) {
+      if (weeklyEntry?.is_off) {
         return Response.json(
           { error: 'Jour de repos selon votre planning. Pointage impossible.' },
           { status: 403, headers: corsHeaders }
         );
       }
 
-      if (weeklyEntry.shift_type_id) {
+      if (weeklyEntry?.shift_type_id) {
+        // Cas normal : sh_weekly_schedule a un type de shift
         const { data: shiftType } = await sbAdmin
           .from('sh_shift_types')
           .select('nom, heure_debut, heure_fin')
@@ -222,7 +216,38 @@ Deno.serve(async (req: Request) => {
           rotationShiftDebut = shiftType.heure_debut;
           rotationShiftFin   = shiftType.heure_fin;
         }
+      } else if (!weeklyEntry) {
+        // Pas de sh_weekly_schedule → fallback : chercher un shift pré-rempli dans sh_shifts
+        // (créé par la synchro de la page Shifts rotatifs)
+        const { data: plannedShift } = await sbAdmin
+          .from('sh_shifts')
+          .select('heure_debut_prevue, heure_fin_prevue')
+          .eq('employee_id', empId)
+          .eq('date', today)
+          .is('heure_arrivee', null)
+          .maybeSingle();
+
+        if (plannedShift?.heure_debut_prevue) {
+          // Utiliser les horaires du shift pré-rempli pour la validation de fenêtre
+          const currentTime = timeMaroc();
+          const debut = plannedShift.heure_debut_prevue;
+          const fin   = plannedShift.heure_fin_prevue || '23:59';
+          if (!isInShiftWindow(currentTime, debut, fin)) {
+            return Response.json(
+              { error: `Hors de votre fenêtre de pointage. Shift prévu : ${debut}–${fin}.` },
+              { status: 403, headers: corsHeaders }
+            );
+          }
+          rotationShiftDebut = debut;
+          rotationShiftFin   = fin;
+        } else {
+          return Response.json(
+            { error: 'Aucun shift programmé pour aujourd\'hui. Contactez votre responsable.' },
+            { status: 403, headers: corsHeaders }
+          );
+        }
       }
+      // Si weeklyEntry existe mais sans shift_type_id ni is_off → on laisse pointer librement
     }
 
     // ── 6. Vérification géofence SERVEUR ─────────────────────
