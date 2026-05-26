@@ -1014,8 +1014,8 @@ const DB = {
     // siteIdHint (currentSite) utilisé comme fallback si la résolution historique échoue
     const effectiveSiteId=this.getEffectiveSiteId(empId, date) || siteIdHint || emp.site_id || null;
     if(!effectiveSiteId) throw new Error(`Site introuvable pour ${emp.prenom} ${emp.nom}. Vérifiez son profil collaborateur.`);
-    const lock=this.getLock(effectiveSiteId, date.substring(0,7));
-    if(lock) throw new Error(`Mois ${date.substring(0,7)} verrouillé.`);
+    const lock=this.getLock(effectiveSiteId,this.getPeriodKey(date));
+    if(lock) throw new Error(`Période ${this.getPeriodLabel(this.getPeriodKey(date))} verrouillée.`);
 
     const existing=Cache.pointage.find(p=>p.employee_id===empId&&p.date===date);
     const now=nowISO();
@@ -1071,8 +1071,8 @@ const DB = {
   async deletePointage(empId, date, session, siteIdHint=null) {
     const emp=Cache.employees.find(e=>e.id===empId);
     const siteForLock=this.getEffectiveSiteId(empId,date)||siteIdHint||emp?.site_id;
-    const lock=this.getLock(siteForLock, date.substring(0,7));
-    if(lock) throw new Error('Mois verrouillé.');
+    const lock=this.getLock(siteForLock,this.getPeriodKey(date));
+    if(lock) throw new Error(`Période ${this.getPeriodLabel(this.getPeriodKey(date))} verrouillée.`);
     const entry=Cache.pointage.find(p=>p.employee_id===empId&&p.date===date);
     if(entry) {
       await this.addAudit('delete',entry.id,session.username,{type:entry.type},null,entry.site_id);
@@ -1146,6 +1146,22 @@ const DB = {
     const emp=Cache.employees.find(e=>e.id===empId); if(!emp) return;
     emp.has_rotation=!emp.has_rotation;
     await SB.from('sh_employees').update({has_rotation:emp.has_rotation}).eq('id',empId);
+  },
+
+  // Retourne la clé de période (YYYY-MM) pour une date donnée
+  // La période court du 26 du mois précédent au 25 du mois courant
+  getPeriodKey(date) {
+    const d=new Date(date+'T12:00:00');
+    const day=d.getDate(),m=d.getMonth(),y=d.getFullYear();
+    if(day>=26){const nm=m===11?0:m+1,ny=m===11?y+1:y;return`${ny}-${String(nm+1).padStart(2,'0')}`;}
+    return`${y}-${String(m+1).padStart(2,'0')}`;
+  },
+  // Retourne le libellé lisible d'une période à partir de sa clé YYYY-MM
+  getPeriodLabel(ym) {
+    const [y,m]=ym.split('-').map(Number);
+    const prevM=m===1?12:m-1,prevY=m===1?y-1:y;
+    const mn=['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
+    return`26 ${mn[prevM-1]} – 25 ${mn[m-1]} ${y}`;
   },
 
   // LOCKS
@@ -1265,7 +1281,7 @@ const DB = {
     await SB.from('sh_shifts').update({heure_depart:heureDepart,duree_minutes:duree,updated_by:session.username,updated_at:now}).eq('id',shift.id);
     // Auto-create/update pointage travaillé si shift complet
     if(statut==='complet') {
-      const lock=this.getLock(emp.site_id,date.substring(0,7));
+      const lock=this.getLock(emp.site_id,this.getPeriodKey(date));
       if(!lock) {
         const existing=Cache.pointage.find(p=>p.employee_id===empId&&p.date===date);
         const note='Shift complet — '+shift.heure_arrivee+(shift.retard_minutes>0?' (+'+this.fmtMinutes(shift.retard_minutes)+' retard)':'')+'–'+heureDepart+' ('+this.fmtMinutes(duree)+')';
@@ -1308,7 +1324,7 @@ const DB = {
     shift.heure_depart_2=heureDepart2; shift.duree_minutes_2=duree2; shift.updated_by=session.username; shift.updated_at=now;
     await SB.from('sh_shifts').update({heure_depart_2:heureDepart2,duree_minutes_2:duree2,updated_by:session.username,updated_at:now}).eq('id',shift.id);
     // Auto-pointage Double Shift
-    const lock=this.getLock(emp.site_id,date.substring(0,7));
+    const lock=this.getLock(emp.site_id,this.getPeriodKey(date));
     if(!lock) {
       const note=`Double shift — Shift 1: ${shift.heure_arrivee}→${shift.heure_depart} (${this.fmtMinutes(duree1)}) · Shift 2: ${shift.heure_arrivee_2}→${heureDepart2} (${this.fmtMinutes(duree2)}) · Total: ${this.fmtMinutes(dureeTotale)}`;
       const existing=Cache.pointage.find(p=>p.employee_id===empId&&p.date===date);
@@ -1405,7 +1421,7 @@ const DB = {
         const schedule=this.getSchedule(req.employee_id);
         const statut=this.shiftStatut(shift,schedule);
         if(statut==='complet') {
-          const lock=this.getLock(emp.site_id,req.date.substring(0,7));
+          const lock=this.getLock(emp.site_id,this.getPeriodKey(req.date));
           if(!lock) {
             const note=`Shift modifié (demande ${reqId}) — ${arr}→${dep} (${this.fmtMinutes(duree)})`;
             const existPt=Cache.pointage.find(p=>p.employee_id===req.employee_id&&p.date===req.date);
@@ -1553,7 +1569,7 @@ const DB = {
         if(d.getDay()!==0){
           const ds=d.toISOString().split('T')[0];
           if(!holidays.includes(ds)){
-            const lock=this.getLock(emp.site_id,ds.substring(0,7));
+            const lock=this.getLock(emp.site_id,this.getPeriodKey(ds));
             if(!lock){
               const existPt=Cache.pointage.find(p=>p.employee_id===req.employee_id&&p.date===ds);
               const note=`${req.type==='cp'?'Congé Payé':'RECUP'} — Demande approuvée par ${session.username}`;
@@ -2888,7 +2904,7 @@ const App = {
         return !ws?.is_off; // exclure si jour OFF dans le planning semaine
       });
       if(!emps.length) return;
-      const lock=DB.getLock(site.id,date.substring(0,7));
+      const lock=DB.getLock(site.id,DB.getPeriodKey(date));
       let sEnCours=0,sComplet=0,sVide=0;
       const rows=emps.map(emp=>{
         const schedule=DB.getSchedule(emp.id);
@@ -3235,7 +3251,7 @@ const App = {
     const site=DB.getSiteById(this.currentSite);
     const days=this._weekDays();
     const employees=this._getVisibleEmps(this.currentSite);
-    const lock=DB.getLock(this.currentSite, days[0].substring(0,7));
+    const lock=DB.getLock(this.currentSite,DB.getPeriodKey(days[0]));
     const DAY_SHORT=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
     const DAY_FULL=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
 
@@ -3344,7 +3360,7 @@ const App = {
   openPlanningCellMenu(empId, date, event) {
     const emp=DB.getEmployees().find(e=>e.id===empId);
     if(!emp) return;
-    if(DB.getLock(emp.site_id, date.substring(0,7))) return;
+    if(DB.getLock(emp.site_id,DB.getPeriodKey(date))) return;
     // Fermer tout menu existant
     document.getElementById('planning-cell-menu')?.remove();
     const entry=DB.getPointageByEmpDate(empId,date);
@@ -3476,14 +3492,14 @@ const App = {
     const days=this._weekDays();
     const employees=DB.getEmployees(this.currentSite).filter(e=>e.actif);
     if(!employees.length) return;
-    const compteAFaire=employees.reduce((n,emp)=>n+days.filter(d=>{const isFerie=DB.isHoliday(d);const lock=DB.getLock(emp.site_id,d.substring(0,7));const exist=DB.getPointageByEmpDate(emp.id,d);return !isFerie&&!lock&&!exist;}).length,0);
+    const compteAFaire=employees.reduce((n,emp)=>n+days.filter(d=>{const isFerie=DB.isHoliday(d);const lock=DB.getLock(emp.site_id,DB.getPeriodKey(d));const exist=DB.getPointageByEmpDate(emp.id,d);return !isFerie&&!lock&&!exist;}).length,0);
     if(!confirm(`Générer le planning pour ${employees.length} collaborateurs ?\n\n${compteAFaire} cellule(s) vide(s) seront remplies avec "Présent".\nLes jours déjà saisis (Présent, Double Shift, OFF…) ne seront pas modifiés.`)) return;
     setSyncStatus('busy','↻ Génération du planning...');
     let count=0;
     for(const emp of employees) {
       for(const date of days) {
         if(DB.isHoliday(date)) continue;
-        if(DB.getLock(emp.site_id,date.substring(0,7))) continue;
+        if(DB.getLock(emp.site_id,DB.getPeriodKey(date))) continue;
         const existing=DB.getPointageByEmpDate(emp.id,date); if(existing) continue;
         await DB.setPointage(emp.id,date,'travaille','Planning automatique',currentSession);
         count++;
@@ -5303,19 +5319,19 @@ const App = {
   renderVerrous(){
     const sites=DB.getSites().filter(s=>s.actif);
     const rows=sites.map(site=>{
-      const months=Array.from({length:12},(_,i)=>{const ym=`${this.currentYear}-${String(i+1).padStart(2,'0')}`;const lock=DB.getLock(site.id,ym);return{ym,lock,lbl:fmtMonth(this.currentYear,i)};});
+      const months=Array.from({length:12},(_,i)=>{const ym=`${this.currentYear}-${String(i+1).padStart(2,'0')}`;const lock=DB.getLock(site.id,ym);return{ym,lock,lbl:DB.getPeriodLabel(ym)};});
       return`<div class="card"><div class="card-header"><div class="card-title">🏠 ${site.nom}</div></div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">
           ${months.map(({ym,lock,lbl})=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
-            <span style="font-size:13px;font-weight:600">${lbl}</span>
+            <span style="font-size:12px;font-weight:600">${lbl}</span>
             ${lock?`<span class="lock-indicator">🔒 ${lock.locked_by} <button style="background:transparent;border:none;cursor:pointer;color:inherit;font-size:12px" onclick="App.removeLock('${site.id}','${ym}')">✕</button></span>`:`<button class="btn btn-ghost btn-xs" onclick="App.addLock('${site.id}','${ym}')">🔓 Verrouiller</button>`}
           </div>`).join('')}
         </div></div>`;
     }).join('');
     document.getElementById('page-content').innerHTML=`<div class="alert alert-info">Une période verrouillée empêche toute saisie. Seul le Cluster Ops Manager peut verrouiller/déverrouiller.</div>${rows}`;
   },
-  async addLock(siteId,ym){if(!confirm(`Verrouiller ${ym} ?`))return;setSyncStatus('busy','↻...');await DB.addLock(siteId,ym,currentSession);setSyncStatus('ok','● En ligne');this.renderVerrous();},
-  async removeLock(siteId,ym){if(!confirm(`Déverrouiller ${ym} ?`))return;setSyncStatus('busy','↻...');await DB.removeLock(siteId,ym,currentSession);setSyncStatus('ok','● En ligne');this.renderVerrous();},
+  async addLock(siteId,ym){if(!confirm(`Verrouiller la période ${DB.getPeriodLabel(ym)} ?`))return;setSyncStatus('busy','↻...');await DB.addLock(siteId,ym,currentSession);setSyncStatus('ok','● En ligne');this.renderVerrous();},
+  async removeLock(siteId,ym){if(!confirm(`Déverrouiller la période ${DB.getPeriodLabel(ym)} ?`))return;setSyncStatus('busy','↻...');await DB.removeLock(siteId,ym,currentSession);setSyncStatus('ok','● En ligne');this.renderVerrous();},
 
   // ---- MODALE ----
   showModal(html, large=false){const o=document.createElement('div');o.className='modal-overlay';o.id='modal-overlay';o.innerHTML=`<div class="modal${large?' modal-lg':''}">${html}</div>`;o.addEventListener('click',e=>{if(e.target===o)this.closeModal();});document.body.appendChild(o);},
