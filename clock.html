@@ -556,11 +556,12 @@ const ClockApp = {
             : Promise.resolve({data:null}),
         ]);
         schedule = schedData.data?.[0] || null;
-        // Priorité : shift du jour → sinon shift d'hier encore ouvert (overnight)
+        // Priorité : shift overnight ouvert d'hier > shift d'aujourd'hui déjà démarré > shift planifié du jour
+        // Évite qu'à minuit un shift planifié non-démarré efface le shift overnight encore ouvert
         const todayShifts = shiftData.data || [];
         const shiftToday = todayShifts.find(s=>s.date===todayStr())||null;
         const shiftYest  = todayShifts.find(s=>s.date===yesterdayStr()&&s.heure_arrivee&&!s.heure_depart)||null;
-        todayShift = shiftToday || shiftYest;
+        todayShift = shiftYest || shiftToday;
         allHolidays = (holData.data||[]).map(h=>h.date);
         leaveBalance = balData.data?.[0] || null;
         leaveRequests = reqData.data || [];

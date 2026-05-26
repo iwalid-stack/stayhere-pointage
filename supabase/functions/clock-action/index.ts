@@ -38,6 +38,11 @@ function nowMaroc(): string {
 function todayMaroc(): string {
   return nowMaroc().substring(0, 10);
 }
+function yesterdayMaroc(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toLocaleString('sv-SE', { timeZone: 'Africa/Casablanca' }).substring(0, 10);
+}
 function timeMaroc(): string {
   return nowMaroc().substring(11, 16);
 }
@@ -350,13 +355,34 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // ── 7b. Récupérer le shift du jour ────────────────────────
-    const { data: existingShift } = await sbAdmin
+    // ── 7b. Récupérer le shift du jour (+ shift overnight d'hier) ─
+    const { data: shiftTodayData } = await sbAdmin
       .from('sh_shifts')
       .select('*')
       .eq('employee_id', empId)
       .eq('date', today)
       .maybeSingle();
+
+    // Pour les shifts overnight (ex: 20h→08h) : si pas de shift actif aujourd'hui,
+    // on cherche un shift ouvert d'hier (heure_arrivee définie, pas de heure_depart).
+    // Cela évite qu'à minuit l'agent ne puisse plus pointer la sortie de son shift de nuit.
+    let existingShift = shiftTodayData;
+    let shiftDate = today; // date du shift actif, utilisée pour les mises à jour
+    if (!shiftTodayData?.heure_arrivee && action !== 'start') {
+      const yesterday = yesterdayMaroc();
+      const { data: overnightShift } = await sbAdmin
+        .from('sh_shifts')
+        .select('*')
+        .eq('employee_id', empId)
+        .eq('date', yesterday)
+        .not('heure_arrivee', 'is', null)
+        .is('heure_depart', null)
+        .maybeSingle();
+      if (overnightShift) {
+        existingShift = overnightShift;
+        shiftDate = yesterday;
+      }
+    }
 
     const serverTime = timeMaroc();    // HH:MM — généré côté serveur
     const serverNow  = nowMaroc();     // ISO datetime — généré côté serveur
@@ -425,7 +451,7 @@ Deno.serve(async (req: Request) => {
           updated_at: serverNow,      // ← timestamp serveur
         })
         .eq('employee_id', empId)
-        .eq('date', today)
+        .eq('date', shiftDate)        // ← shiftDate gère les shifts overnight
         .select()
         .single();
 
@@ -445,7 +471,7 @@ Deno.serve(async (req: Request) => {
           updated_at: serverNow,
         })
         .eq('employee_id', empId)
-        .eq('date', today)
+        .eq('date', shiftDate)        // ← shiftDate gère les shifts overnight
         .select()
         .single();
 
@@ -474,7 +500,7 @@ Deno.serve(async (req: Request) => {
           updated_at: serverNow,
         })
         .eq('employee_id', empId)
-        .eq('date', today)
+        .eq('date', shiftDate)        // ← shiftDate gère les shifts overnight
         .select()
         .single();
 
