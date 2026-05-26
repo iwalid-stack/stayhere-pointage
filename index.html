@@ -3280,9 +3280,10 @@ const App = {
           label=`<span style="color:#ccc;font-size:16px">·</span>`;
         }
 
-        const onclick=!isLocked&&!isFerie?`onclick="App.openPlanningCellMenu('${emp.id}','${date}',event)"`:' ';
-        const cursor=!isLocked&&!isFerie?'pointer':'default';
-        return`<td ${onclick} title="${!isLocked&&!isFerie?'Cliquer pour choisir le type':''}" style="text-align:center;padding:6px 4px;${bg};cursor:${cursor}">${label}</td>`;
+        const onclick=!isLocked?`onclick="App.openPlanningCellMenu('${emp.id}','${date}',event)"`:' ';
+        const cursor=!isLocked?'pointer':'default';
+        const titleTip=!isLocked?(isFerie?`Jour férié — ${DB.getHolidayName(date)} (cliquer pour saisir)`:'Cliquer pour choisir le type'):'';
+        return`<td ${onclick} title="${titleTip}" style="text-align:center;padding:6px 4px;${bg};cursor:${cursor}">${label}</td>`;
       }).join('');
 
       // Sélecteur jour de repos
