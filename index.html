@@ -2433,6 +2433,57 @@ const App = {
         </div>
       </div>
     </div>`;
+    // Marquer automatiquement les absences en arrière-plan (throttlé à 30 min)
+    this.autoMarkAbsences().catch(e=>console.warn('autoMarkAbsences:',e));
+  },
+
+  async autoMarkAbsences() {
+    const ABSENCE_DELAY_MIN = 120; // 2h après heure prévue
+    const today = todayStr();
+    const nowMin = new Date().getHours()*60+new Date().getMinutes();
+
+    // Throttle : max une fois toutes les 30 min par jour
+    const cacheKey = 'absenceCheck_'+today;
+    const lastRun = parseInt(localStorage.getItem(cacheKey)||'0');
+    if (Date.now()-lastRun < 30*60*1000) return;
+    localStorage.setItem(cacheKey, Date.now());
+
+    const allEmps = DB.getEmployees().filter(e=>e.actif);
+    const todayEntries = (Cache.pointage||[]).filter(p=>p.date===today);
+    const todayShifts  = (Cache.shifts||[]).filter(s=>s.date===today);
+
+    let count = 0;
+    for (const emp of allEmps) {
+      const entry = todayEntries.find(p=>p.employee_id===emp.id);
+      // Ne pas écraser un statut déjà renseigné (off, congé, maladie, absence, AT, double)
+      if (entry && ['off','conge','recup','maladie','absence','at','double'].includes(entry.type)) continue;
+
+      // Déjà pointé → OK
+      const shift = todayShifts.find(s=>s.employee_id===emp.id);
+      if (shift?.heure_arrivee) continue;
+
+      // Heure prévue : sh_shifts en priorité, sinon sh_schedules
+      let plannedStart = shift?.heure_debut_prevue;
+      if (!plannedStart) {
+        const schedule = DB.getSchedule(emp.id);
+        plannedStart = schedule?.heure_debut;
+      }
+      if (!plannedStart) continue;
+
+      const [ph, pm] = plannedStart.split(':').map(Number);
+      if (nowMin < ph*60+pm+ABSENCE_DELAY_MIN) continue;
+
+      try {
+        await DB.setPointage(emp.id, today, 'absence', 'Absence auto – non pointé (2h)', currentSession, emp.site_id);
+        count++;
+      } catch(e) { console.warn('autoMarkAbsences emp', emp.id, e); }
+    }
+
+    if (count > 0) {
+      console.log(`[autoMarkAbsences] ${count} absence(s) marquée(s)`);
+      await loadData();
+      if (this.currentPage==='home') this.renderHome();
+    }
   },
 
   showHomeFilter(type) {
