@@ -3444,23 +3444,35 @@ const App = {
     const emp=DB.getEmployees().find(e=>e.id===empId);
     if(!emp) return;
     if(DB.getLock(emp.site_id,DB.getPeriodKey(date))) return;
-    // Fermer tout menu existant
     document.getElementById('planning-cell-menu')?.remove();
     const entry=DB.getPointageByEmpDate(empId,date);
+    // Détecter le shift prévu pour afficher ✓ sur le bon preset
+    const shift=Cache.shifts?.find(s=>s.employee_id===empId&&s.date===date);
+    const isKA     = entry?.type==='travaille'&&shift?.heure_debut_prevue==='08:00'&&shift?.heure_fin_prevue==='16:00';
+    const isMiddle = entry?.type==='travaille'&&shift?.heure_debut_prevue==='11:00'&&shift?.heure_fin_prevue==='20:00';
+    const isKH     = entry?.type==='travaille'&&(shift?.heure_debut_prevue==='16:00'&&(shift?.heure_fin_prevue==='00:00'||shift?.heure_fin_prevue==='23:59'));
+    const isTravGen= entry?.type==='travaille'&&!isKA&&!isMiddle&&!isKH;
     const menuItems=[
-      {key:'travaille', label:'✅ Présent', color:'var(--travaille)'},
-      {key:'double',    label:'⏰ Double shift', color:'var(--double)'},
-      {key:'off',       label:'🔴 OFF / Repos', color:'var(--off)'},
-      {key:'conge',     label:'🏖 Congé', color:'var(--conge)'},
-      {key:'recup',     label:'🔄 Récupération', color:'var(--recup)'},
-      {key:'maladie',   label:'🏥 Maladie', color:'var(--maladie)'},
-      {key:'',          label:'✕ Effacer', color:'#999'},
+      {key:'travaille',     label:'✅ Présent (horaires habituels)', color:'var(--travaille)',     check:isTravGen},
+      {key:'double',        label:'⏰ Double shift',                 color:'var(--double)',         check:entry?.type==='double'},
+      {key:'off',           label:'🔴 OFF / Repos',                 color:'var(--off)',            check:entry?.type==='off'},
+      {key:'conge',         label:'🏖 Congé',                       color:'var(--conge)',          check:entry?.type==='conge'},
+      {key:'recup',         label:'🔄 Récupération',               color:'var(--recup)',          check:entry?.type==='recup'},
+      {key:'maladie',       label:'🏥 Maladie',                    color:'var(--maladie)',        check:entry?.type==='maladie'},
+      {key:'',              label:'✕ Effacer',                     color:'#999',                  check:false},
+      {key:'__sep',         label:'── Shifts planifiés ──',         color:'#aaa',                  check:false, sep:true},
+      {key:'ka_shift',      label:'☀️ KA — 08:00 → 16:00',         color:'var(--accent)',          check:isKA},
+      {key:'middle_shift',  label:'🌤 Middle — 11:00 → 20:00',     color:'#f59e0b',               check:isMiddle},
+      {key:'kh_shift',      label:'🌙 KH — 16:00 → 00:00',         color:'#60a5fa',               check:isKH},
     ];
     const rect=event.target.closest('td').getBoundingClientRect();
     const menu=document.createElement('div');
     menu.id='planning-cell-menu';
-    menu.style.cssText=`position:fixed;z-index:9999;background:white;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:4px;min-width:160px;top:${Math.min(rect.bottom+4, window.innerHeight-220)}px;left:${Math.min(rect.left, window.innerWidth-170)}px`;
-    menu.innerHTML=menuItems.map(m=>`<div onclick="App._setPlanningCell('${empId}','${date}','${m.key}')" style="padding:7px 12px;cursor:pointer;border-radius:6px;font-size:13px;color:${m.color};font-weight:600;display:flex;align-items:center;gap:6px" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">${m.label}${entry?.type===m.key?' ✓':''}</div>`).join('');
+    menu.style.cssText=`position:fixed;z-index:9999;background:white;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:4px;min-width:190px;top:${Math.min(rect.bottom+4,window.innerHeight-320)}px;left:${Math.min(rect.left,window.innerWidth-200)}px`;
+    menu.innerHTML=menuItems.map(m=>m.sep
+      ?`<div style="padding:5px 12px;font-size:10px;color:#aaa;font-weight:600;letter-spacing:0.5px;text-align:center">${m.label}</div>`
+      :`<div onclick="App._setPlanningCell('${empId}','${date}','${m.key}')" style="padding:7px 12px;cursor:pointer;border-radius:6px;font-size:13px;color:${m.color};font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:6px" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''"><span>${m.label}</span>${m.check?'<span style="color:var(--accent-green)">✓</span>':''}</div>`
+    ).join('');
     document.body.appendChild(menu);
     setTimeout(()=>document.addEventListener('click',function close(e){if(!menu.contains(e.target)){menu.remove();document.removeEventListener('click',close);}},{once:false}),0);
   },
@@ -3479,7 +3491,16 @@ const App = {
         await this._upsertDoubleShift(empId,date,emp);
       } else if(type==='travaille') {
         await DB.setPointage(empId,date,'travaille','Planning manuel',currentSession);
-        await this._upsertRegularShift(empId,date,emp); // créer shift prévu avec horaires employé
+        await this._upsertRegularShift(empId,date,emp);
+      } else if(type==='ka_shift') {
+        await DB.setPointage(empId,date,'travaille','Shift KA 08:00-16:00 (planning)',currentSession);
+        await this._upsertShiftWithHours(empId,date,emp,'08:00','16:00');
+      } else if(type==='middle_shift') {
+        await DB.setPointage(empId,date,'travaille','Middle shift 11:00-20:00 (planning)',currentSession);
+        await this._upsertShiftWithHours(empId,date,emp,'11:00','20:00');
+      } else if(type==='kh_shift') {
+        await DB.setPointage(empId,date,'travaille','Shift KH 16:00-00:00 (planning)',currentSession);
+        await this._upsertShiftWithHours(empId,date,emp,'16:00','00:00');
       } else if(type==='off') {
         await DB.setPointage(empId,date,'off','Jour de repos (planning)',currentSession);
         await this._clearPlannedShift(empId,date); // retirer le shift prévu (pas de pointage)
@@ -3546,6 +3567,27 @@ const App = {
         });
       }
     } catch(e) { console.warn('_upsertRegularShift:', e); }
+  },
+
+  async _upsertShiftWithHours(empId, date, emp, debut, fin) {
+    if(!emp) emp=DB.getEmployees().find(e=>e.id===empId);
+    if(!emp) return;
+    try {
+      const {data:existing}=await SB.from('sh_shifts').select('id').eq('employee_id',empId).eq('date',date);
+      const shift=existing?.[0];
+      if(shift) {
+        await SB.from('sh_shifts').update({heure_debut_prevue:debut,heure_fin_prevue:fin,updated_by:currentSession.username,updated_at:nowISO()}).eq('id',shift.id);
+      } else {
+        await SB.from('sh_shifts').insert({
+          id:uid(),employee_id:empId,site_id:emp.site_id,date,
+          heure_arrivee:null,heure_depart:null,
+          heure_debut_prevue:debut,heure_fin_prevue:fin,
+          retard_minutes:0,duree_minutes:0,pause_minutes:0,
+          validated_by_ka:null,validated_at_ka:null,
+          created_by:currentSession.username,created_at:nowISO(),updated_by:null,updated_at:null
+        });
+      }
+    } catch(e) { console.warn('_upsertShiftWithHours:', e); }
   },
 
   async _upsertRotationShift(empId, date, shiftTypeId, emp) {
