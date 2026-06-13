@@ -4150,6 +4150,12 @@ const App = {
         </label>
       </div>
       <div id="emp-horaire-fields" style="${emp?.pointage_horaire===false?'display:none':''}">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <span style="font-size:11px;color:var(--text-muted);align-self:center;margin-right:4px">Raccourcis :</span>
+          ${[['Matin','09:00','17:00'],['Middle','11:00','20:00'],['Après-midi','11:00','19:00'],['Soir','16:00','00:00']].map(([nom,d,f])=>
+            `<button type="button" onclick="document.getElementById('emp-hdebut').value='${d}';document.getElementById('emp-hfin').value='${f}'" style="font-size:11px;padding:3px 9px;background:var(--surface);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text);font-family:inherit" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">${nom}<span style="opacity:0.55;margin-left:4px">${d}–${f}</span></button>`
+          ).join('')}
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div class="form-group"><label>Heure début prévue</label><input id="emp-hdebut" type="time" value="${sched?.heure_debut||'09:00'}"></div>
           <div class="form-group"><label>Heure fin prévue</label><input id="emp-hfin" type="time" value="${sched?.heure_fin||'18:00'}"></div>
