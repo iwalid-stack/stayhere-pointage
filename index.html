@@ -2242,29 +2242,50 @@ const App = {
     // ---- Stats du jour ----
     const sites=DB.getSites().filter(s=>s.actif);
     const allEmps=DB.getEmployees().filter(e=>e.actif);
+    const yesterday=(()=>{const d=new Date();d.setDate(d.getDate()-1);return d.toISOString().substring(0,10);})();
+    const nowMin=(()=>{const d=new Date();return d.getHours()*60+d.getMinutes();})();
+    const nowHour=new Date().getHours();
 
     // Pointage du jour — lecture directe du cache (date exacte = aujourd'hui)
     const todayEntries=(Cache.pointage||[]).filter(p=>p.date===today);
     const travCount=todayEntries.filter(p=>['travaille','double'].includes(p.type)).length;
-    const absCount=todayEntries.filter(p=>['absence','maladie','at'].includes(p.type)).length;
+    const explicitAbsCount=todayEntries.filter(p=>['absence','maladie','at'].includes(p.type)).length;
 
     // Shifts en cours : aujourd'hui, OU shift overnight de la veille encore actif
-    // (ex : shift 20h→08h démarré hier et pas encore terminé)
-    const yesterday=(()=>{const d=new Date();d.setDate(d.getDate()-1);return d.toISOString().substring(0,10);})();
-    const nowMin=(()=>{const d=new Date();return d.getHours()*60+d.getMinutes();})();
     const activeShifts=(Cache.shifts||[]).filter(sh=>{
       if(!sh.heure_arrivee||sh.heure_depart) return false;
       if(sh.date===today) return true;
-      // Shift overnight de la veille : fin_prevue en matinée (< heure_arrivee) et heure pas encore passée
       if(sh.date===yesterday&&sh.heure_fin_prevue){
         const arrivMin=sh.heure_arrivee.split(':').map(Number).reduce((h,m)=>h*60+m,0);
         const finMin=sh.heure_fin_prevue.split(':').map(Number).reduce((h,m)=>h*60+m,0);
-        if(finMin<arrivMin&&nowMin<finMin) return true; // overnight encore en cours
+        if(finMin<arrivMin&&nowMin<finMin) return true;
       }
       return false;
     });
 
-    // Validations en attente (demandes de modification de shift)
+    // Collaborateurs sensés être en shift mais n'ayant pas pointé
+    // = shift prévu aujourd'hui (heure_debut_prevue passée + 30 min) sans heure_arrivee
+    // et sans entrée off/conge/recup dans sh_pointage
+    const GRACE=30;
+    const nonPointeEmps=(Cache.shifts||[]).filter(sh=>{
+      if(sh.date!==today) return false;
+      if(sh.heure_arrivee) return false; // déjà pointé
+      if(!sh.heure_debut_prevue) return false;
+      const [h,m]=sh.heure_debut_prevue.split(':').map(Number);
+      if(nowMin<h*60+m+GRACE) return false; // pas encore l'heure
+      const entry=todayEntries.find(p=>p.employee_id===sh.employee_id);
+      if(entry&&['off','conge','recup','maladie','absence','at'].includes(entry.type)) return false;
+      return true;
+    }).map(sh=>allEmps.find(e=>e.id===sh.employee_id)).filter(Boolean)
+      .filter((e,i,a)=>a.findIndex(x=>x.id===e.id)===i); // dédoublonner
+
+    const absCount=explicitAbsCount+nonPointeEmps.length;
+
+    // Fenêtres de notification : 10h, 18h, 22h (±1h30)
+    const isNotifWindow=(nowHour>=10&&nowHour<12)||(nowHour>=18&&nowHour<20)||(nowHour>=22&&nowHour<24);
+    const notifLabel=nowHour>=22?'Rappel 22h':nowHour>=18?'Rappel 18h':'Rappel 10h';
+
+    // Validations en attente
     const pendingValidations=(Cache.shiftChangeRequests||[]).filter(p=>p.status==='pending').length;
 
     // Congés en attente (adapté selon le rôle)
@@ -2292,7 +2313,7 @@ const App = {
     if(this.canManageConges())
       quickLinks.push({icon:'🏖',label:'Congés & RECUP',page:'conges',color:'#558b2f'});
 
-    // Alerte validations
+    // Alertes
     const alerts=[];
     if(pendingValidations>0) alerts.push({color:'var(--accent)',icon:'⚠️',text:`${pendingValidations} saisie${pendingValidations>1?'s':''} en attente de validation`});
     if(pendingLeaves>0) alerts.push({color:'var(--accent-green)',icon:'🏖',text:`${pendingLeaves} demande${pendingLeaves>1?'s':''} de congé en attente`});
@@ -2322,11 +2343,39 @@ const App = {
       </div>
 
       <!-- Alertes -->
-      ${alerts.length?`<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px">${alerts.map(a=>`
+      ${alerts.length?`<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">${alerts.map(a=>`
         <div style="display:flex;align-items:center;gap:10px;background:${a.color}18;border:1px solid ${a.color}44;border-radius:10px;padding:10px 16px">
           <span style="font-size:16px">${a.icon}</span>
           <span style="font-size:13px;font-weight:600;color:var(--text)">${a.text}</span>
         </div>`).join('')}</div>`:''}
+
+      <!-- Notification non-pointés -->
+      ${nonPointeEmps.length>0?`
+      <div style="margin-bottom:24px;background:${isNotifWindow?'rgba(220,38,38,0.12)':'rgba(245,158,11,0.08)'};border:1.5px solid ${isNotifWindow?'rgba(220,38,38,0.4)':'rgba(245,158,11,0.3)'};border-radius:12px;padding:14px 16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:16px">${isNotifWindow?'🔴':'🟡'}</span>
+            <span style="font-size:13px;font-weight:700;color:${isNotifWindow?'#f87171':'#fbbf24'}">${isNotifWindow?`⚡ ${notifLabel} — `:''}${nonPointeEmps.length} collaborateur${nonPointeEmps.length>1?'s':''} en shift n'${nonPointeEmps.length>1?'ont':'a'} pas pointé</span>
+          </div>
+          <button onclick="App.showHomeFilter('nonPointes')" style="font-size:11px;background:transparent;border:1px solid currentColor;border-radius:6px;padding:3px 8px;cursor:pointer;color:${isNotifWindow?'#f87171':'#fbbf24'};font-family:inherit">Voir →</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${nonPointeEmps.slice(0,8).map(emp=>{
+            const sh=(Cache.shifts||[]).find(s=>s.date===today&&s.employee_id===emp.id);
+            const site=DB.getSiteById(emp.site_id);
+            return`<div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.05);border-radius:8px;padding:5px 10px;font-size:12px">
+              <span style="width:22px;height:22px;border-radius:50%;background:rgba(245,158,11,0.2);color:#fbbf24;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px">${(emp.prenom||'?')[0].toUpperCase()}</span>
+              <div>
+                <div style="font-weight:600;color:var(--text)">${emp.prenom} ${emp.nom}</div>
+                <div style="color:var(--text-muted);font-size:10px">${sh?.heure_debut_prevue||'?'}h · ${site?.nom||'—'}</div>
+              </div>
+            </div>`;
+          }).join('')}
+          ${nonPointeEmps.length>8?`<div style="font-size:11px;color:var(--text-muted);align-self:center">+${nonPointeEmps.length-8} autres</div>`:''}
+        </div>
+      </div>`:''}
+
+
 
       <!-- Stats du jour -->
       <div style="margin-bottom:28px">
@@ -2409,14 +2458,28 @@ const App = {
     } else if(type==='absents') {
       title='Absents / Malades aujourd\'hui';
       color='var(--accent)';
+      const todayPtg=(Cache.pointage||[]).filter(p=>p.date===today);
       const labelMap={absence:'Absence',maladie:'Maladie',at:'AT'};
-      const entries=(Cache.pointage||[]).filter(p=>p.date===today&&['absence','maladie','at'].includes(p.type));
-      rows=entries.map(p=>{
-        const emp=allEmps.find(e=>e.id===p.employee_id);
-        if(!emp) return null;
+      // 1. Absences explicites
+      const explicitRows=(Cache.pointage||[]).filter(p=>p.date===today&&['absence','maladie','at'].includes(p.type)).map(p=>{
+        const emp=allEmps.find(e=>e.id===p.employee_id); if(!emp) return null;
         const site=allSites.find(s=>s.id===p.site_id);
         return {nom:`${emp.prenom||''} ${emp.nom||''}`.trim(),sub:site?.nom||'—',badge:labelMap[p.type]||p.type,avatar:(emp.prenom||'?')[0].toUpperCase()};
       }).filter(Boolean);
+      // 2. En shift mais n'ont pas pointé (30 min de grâce)
+      const _nowMin2=(()=>{const d=new Date();return d.getHours()*60+d.getMinutes();})();
+      const missingRows=(Cache.shifts||[]).filter(sh=>{
+        if(sh.date!==today||sh.heure_arrivee||!sh.heure_debut_prevue) return false;
+        const [h,m]=sh.heure_debut_prevue.split(':').map(Number);
+        if(_nowMin2<h*60+m+30) return false;
+        const entry=todayPtg.find(p=>p.employee_id===sh.employee_id);
+        return !entry||!['off','conge','recup','maladie','absence','at'].includes(entry.type);
+      }).map(sh=>{
+        const emp=allEmps.find(e=>e.id===sh.employee_id); if(!emp) return null;
+        const site=allSites.find(s=>s.id===sh.site_id||s.id===emp.site_id);
+        return {nom:`${emp.prenom||''} ${emp.nom||''}`.trim(),sub:site?.nom||'—',badge:`<span style="color:#fbbf24;font-weight:700">Non pointé ${sh.heure_debut_prevue}</span>`,avatar:(emp.prenom||'?')[0].toUpperCase()};
+      }).filter(Boolean);
+      rows=[...explicitRows,...missingRows];
 
     } else if(type==='shifts') {
       title='Shifts actifs en ce moment';
@@ -2447,6 +2510,26 @@ const App = {
         const badge=isOvn?`🌙 Nuit · Entré ${inTime} · ${dur}`:`Entré ${inTime} · ${dur}`;
         return {nom:nomAff,sub:site?.nom||'—',badge,avatar:(nomAff[0]||'?').toUpperCase()};
       });
+
+    } else if(type==='nonPointes') {
+      title='Non pointés — shift en cours';
+      color='#fbbf24';
+      const _nowMin3=(()=>{const d=new Date();return d.getHours()*60+d.getMinutes();})();
+      const todayPtg3=(Cache.pointage||[]).filter(p=>p.date===today);
+      const missingShifts=(Cache.shifts||[]).filter(sh=>{
+        if(sh.date!==today||sh.heure_arrivee||!sh.heure_debut_prevue) return false;
+        const [h,m]=sh.heure_debut_prevue.split(':').map(Number);
+        if(_nowMin3<h*60+m+30) return false;
+        const entry=todayPtg3.find(p=>p.employee_id===sh.employee_id);
+        return !entry||!['off','conge','recup','maladie','absence','at'].includes(entry.type);
+      });
+      rows=missingShifts.map(sh=>{
+        const emp=allEmps.find(e=>e.id===sh.employee_id); if(!emp) return null;
+        const site=allSites.find(s=>s.id===sh.site_id||s.id===emp.site_id);
+        const retardMin=_nowMin3-(sh.heure_debut_prevue.split(':').map(Number).reduce((h,m)=>h*60+m,0));
+        const retardStr=retardMin>=60?`${Math.floor(retardMin/60)}h${String(retardMin%60).padStart(2,'0')} de retard`:`${retardMin}min de retard`;
+        return {nom:`${emp.prenom||''} ${emp.nom||''}`.trim(),sub:site?.nom||'—',badge:`<span style="color:#fbbf24">Prévu ${sh.heure_debut_prevue} · ${retardStr}</span>`,avatar:(emp.prenom||'?')[0].toUpperCase()};
+      }).filter(Boolean);
 
     } else if(type==='users') {
       title='Utilisateurs connectés';

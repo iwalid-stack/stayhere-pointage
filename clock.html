@@ -722,13 +722,24 @@ const ClockApp = {
         if(!employee) buttons+=`<div style="font-size:12px;color:rgba(255,165,0,0.7);margin-top:8px;text-align:center">Aucun profil collaborateur lié à ce compte. Contactez l'administrateur.</div>`;
       }
     } else if(status==='active') {
+      const elapsed=this.getElapsedMins();
+      const MIN_DEPART=10; // 10 min minimum avant de pouvoir pointer le départ
+      const canLeave=elapsed>=MIN_DEPART;
+      const leaveIn=Math.ceil(MIN_DEPART-elapsed);
       buttons=`
         <button class="btn-clock btn-pause" onclick="ClockApp.pauseShift()">⏸ &nbsp;Mettre en pause</button>
-        <button class="btn-clock btn-stop" onclick="ClockApp.confirmStop()">⏹ &nbsp;Pointer le départ</button>`;
+        ${canLeave
+          ?`<button class="btn-clock btn-stop" onclick="ClockApp.confirmStop()">⏹ &nbsp;Pointer le départ</button>`
+          :`<button class="btn-clock btn-stop" disabled style="opacity:0.35;cursor:not-allowed">⏳ &nbsp;Départ dans ${leaveIn} min</button>`}`;
     } else if(status==='paused') {
+      const elapsedP=this.getElapsedMins();
+      const canLeaveP=elapsedP>=10;
+      const leaveInP=Math.ceil(10-elapsedP);
       buttons=`
         <button class="btn-clock btn-resume" onclick="ClockApp.resumeShift()">▶ &nbsp;Reprendre le shift</button>
-        <button class="btn-clock btn-stop" onclick="ClockApp.confirmStop()">⏹ &nbsp;Pointer le départ</button>`;
+        ${canLeaveP
+          ?`<button class="btn-clock btn-stop" onclick="ClockApp.confirmStop()">⏹ &nbsp;Pointer le départ</button>`
+          :`<button class="btn-clock btn-stop" disabled style="opacity:0.35;cursor:not-allowed">⏳ &nbsp;Départ dans ${leaveInP} min</button>`}`;
     } else if(status==='done') {
       const dur=todayShift.duree_minutes||0;
       const pause=todayShift.pause_minutes||0;
@@ -971,8 +982,8 @@ const ClockApp = {
         if((status==='active'||status==='paused')&&pausedMins>0){chips+=`<div class="chip chip-pause">⏸ Pause : ${fmtMinutes(pausedMins)}</div>`;}
         if(status==='done'){chips+=`<div class="chip chip-done">✓ Terminé à ${todayShift.heure_depart}</div>`;}
         if(status==='not_started'){if(todayPointage?.type==='off'){buttons=`<div style="text-align:center;padding:12px 0"><div style="font-size:44px;margin-bottom:12px">🌙</div><div style="font-size:19px;font-weight:700;color:rgba(255,255,255,0.65)">Jour de repos</div><div style="font-size:13px;color:rgba(255,255,255,0.3);margin-top:6px">Vous n'avez pas de shift prévu aujourd'hui</div></div>`;}else{buttons=`<button class="btn-clock btn-start" onclick="ClockApp.startShift()">▶ &nbsp;Pointer l'arrivée</button>`;if(!employee)buttons+=`<div style="font-size:12px;color:rgba(255,165,0,0.7);margin-top:8px;text-align:center">Aucun profil collaborateur lié à ce compte. Contactez l'administrateur.</div>`;}}
-        else if(status==='active'){buttons=`<button class="btn-clock btn-pause" onclick="ClockApp.pauseShift()">⏸ &nbsp;Mettre en pause</button><button class="btn-clock btn-stop" onclick="ClockApp.confirmStop()">⏹ &nbsp;Pointer le départ</button>`;}
-        else if(status==='paused'){buttons=`<button class="btn-clock btn-resume" onclick="ClockApp.resumeShift()">▶ &nbsp;Reprendre le shift</button><button class="btn-clock btn-stop" onclick="ClockApp.confirmStop()">⏹ &nbsp;Pointer le départ</button>`;}
+        else if(status==='active'){const el=this.getElapsedMins(),cl=el>=10,li=Math.ceil(10-el);buttons=`<button class="btn-clock btn-pause" onclick="ClockApp.pauseShift()">⏸ &nbsp;Mettre en pause</button>${cl?`<button class="btn-clock btn-stop" onclick="ClockApp.confirmStop()">⏹ &nbsp;Pointer le départ</button>`:`<button class="btn-clock btn-stop" disabled style="opacity:0.35;cursor:not-allowed">⏳ &nbsp;Départ dans ${li} min</button>`}`;}
+        else if(status==='paused'){const elP=this.getElapsedMins(),clP=elP>=10,liP=Math.ceil(10-elP);buttons=`<button class="btn-clock btn-resume" onclick="ClockApp.resumeShift()">▶ &nbsp;Reprendre le shift</button>${clP?`<button class="btn-clock btn-stop" onclick="ClockApp.confirmStop()">⏹ &nbsp;Pointer le départ</button>`:`<button class="btn-clock btn-stop" disabled style="opacity:0.35;cursor:not-allowed">⏳ &nbsp;Départ dans ${liP} min</button>`}`;}
         else if(status==='done'){const dur=todayShift.duree_minutes||0;const pause=todayShift.pause_minutes||0;summaryHtml=`<div class="summary-card"><div class="summary-row"><span class="s-label">Arrivée</span><span class="s-value">${todayShift.heure_arrivee}</span></div><div class="summary-row"><span class="s-label">Départ</span><span class="s-value">${todayShift.heure_depart}</span></div>${retard>0?`<div class="summary-row"><span class="s-label">Retard</span><span class="s-value warn">+${fmtMinutes(retard)}</span></div>`:''}${pause>0?`<div class="summary-row"><span class="s-label">Pause totale</span><span class="s-value">${fmtMinutes(pause)}</span></div>`:''}<div class="summary-row"><span class="s-label">Temps travaillé</span><span class="s-value ok">${fmtMinutes(dur)}</span></div></div>`;buttons=`<button class="btn-clock btn-neutral" onclick="ClockApp.loadData(false)">↻ Actualiser</button>`;}
         tabBody.innerHTML=`<div class="clock-date">${dateLabel}</div><div class="schedule-line">${schedLine}</div><div class="status-ring-wrap" id="ring-wrap"><svg class="ring-svg" viewBox="0 0 100 100"><circle class="ring-track" cx="50" cy="50" r="45"/><circle class="ring-progress" id="ring-prog" cx="50" cy="50" r="45" stroke-dasharray="${CIRC}" stroke-dashoffset="${CIRC}" stroke="rgba(255,255,255,0.1)"/></svg><div class="ring-inner"><div class="ring-time" id="ring-time">--</div><div class="ring-label" id="ring-label"></div></div></div><div class="info-chips" id="info-chips">${chips}</div>${summaryHtml}<div class="btn-area">${buttons}</div>`;
         this._updateRing();
