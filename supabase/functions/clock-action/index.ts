@@ -135,6 +135,14 @@ Deno.serve(async (req: Request) => {
       return Response.json({ error: 'Action invalide' }, { status: 400, headers: cors });
     }
 
+    // Validation des coordonnées GPS
+    if (latitude !== undefined || longitude !== undefined) {
+      if (typeof latitude !== 'number' || typeof longitude !== 'number' ||
+          latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+        return Response.json({ error: 'Coordonnées GPS invalides' }, { status: 400, headers: cors });
+      }
+    }
+
     // ── 4. Récupérer le site effectif (avec détachement temp) ─
     const today = todayMaroc();
 
