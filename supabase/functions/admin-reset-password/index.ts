@@ -5,18 +5,19 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
+import { getCorsHeaders } from '../_shared/cors.ts';
 
 Deno.serve(async (req: Request) => {
+  const cors = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: cors });
   }
 
   try {
     // ── 1. Vérifier que l'appelant est authentifié ────────────
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return Response.json({ error: 'Non authentifié' }, { status: 401, headers: corsHeaders });
+      return Response.json({ error: 'Non authentifié' }, { status: 401, headers: cors });
     }
     const userToken = authHeader.replace('Bearer ', '');
 
@@ -28,7 +29,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: { user }, error: authError } = await sbUser.auth.getUser();
     if (authError || !user) {
-      return Response.json({ error: 'Token invalide' }, { status: 401, headers: corsHeaders });
+      return Response.json({ error: 'Token invalide' }, { status: 401, headers: cors });
     }
 
     // ── 2. Vérifier que l'appelant est cluster_ops ─────────────
@@ -44,16 +45,16 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (callerProfile?.role !== 'cluster_ops') {
-      return Response.json({ error: 'Accès refusé — rôle cluster_ops requis' }, { status: 403, headers: corsHeaders });
+      return Response.json({ error: 'Accès refusé — rôle cluster_ops requis' }, { status: 403, headers: cors });
     }
 
     // ── 3. Parser la requête ──────────────────────────────────
     const { targetUsername, newPassword } = await req.json();
     if (!targetUsername || !newPassword) {
-      return Response.json({ error: 'targetUsername et newPassword requis' }, { status: 400, headers: corsHeaders });
+      return Response.json({ error: 'targetUsername et newPassword requis' }, { status: 400, headers: cors });
     }
     if (newPassword.length < 6) {
-      return Response.json({ error: 'Le mot de passe doit contenir au moins 6 caractères' }, { status: 400, headers: corsHeaders });
+      return Response.json({ error: 'Le mot de passe doit contenir au moins 6 caractères' }, { status: 400, headers: cors });
     }
 
     // ── 4. Trouver l'utilisateur cible ────────────────────────
@@ -63,7 +64,7 @@ Deno.serve(async (req: Request) => {
 
     const targetUser = users.find(u => u.email === email);
     if (!targetUser) {
-      return Response.json({ error: `Utilisateur '${targetUsername}' introuvable` }, { status: 404, headers: corsHeaders });
+      return Response.json({ error: `Utilisateur '${targetUsername}' introuvable` }, { status: 404, headers: cors });
     }
 
     // ── 5. Mettre à jour le mot de passe via Admin API ────────
@@ -73,13 +74,13 @@ Deno.serve(async (req: Request) => {
     );
     if (updateErr) throw updateErr;
 
-    return Response.json({ ok: true, message: `Mot de passe de ${targetUsername} réinitialisé` }, { headers: corsHeaders });
+    return Response.json({ ok: true, message: `Mot de passe de ${targetUsername} réinitialisé` }, { headers: cors });
 
   } catch (err) {
     console.error('admin-reset-password error:', err);
     return Response.json(
       { error: 'Erreur serveur', detail: err instanceof Error ? err.message : String(err) },
-      { status: 500, headers: corsHeaders }
+      { status: 500, headers: cors }
     );
   }
 });

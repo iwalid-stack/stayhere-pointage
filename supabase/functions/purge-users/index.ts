@@ -11,18 +11,19 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
+import { getCorsHeaders } from '../_shared/cors.ts';
 
 Deno.serve(async (req: Request) => {
+  const cors = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: cors });
   }
 
   try {
     // ── 1. Authentification + vérification rôle cluster_ops ──
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return Response.json({ error: 'Non authentifié' }, { status: 401, headers: corsHeaders });
+      return Response.json({ error: 'Non authentifié' }, { status: 401, headers: cors });
     }
 
     const sbAdmin = createClient(
@@ -38,7 +39,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: { user } } = await sbUser.auth.getUser();
     if (!user) {
-      return Response.json({ error: 'Token invalide' }, { status: 401, headers: corsHeaders });
+      return Response.json({ error: 'Token invalide' }, { status: 401, headers: cors });
     }
 
     const { data: callerProfile } = await sbAdmin
@@ -48,7 +49,7 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (callerProfile?.role !== 'cluster_ops') {
-      return Response.json({ error: 'Accès refusé — rôle cluster_ops requis' }, { status: 403, headers: corsHeaders });
+      return Response.json({ error: 'Accès refusé — rôle cluster_ops requis' }, { status: 403, headers: cors });
     }
 
     // ── 2. Paramètres ────────────────────────────────────────
@@ -67,7 +68,7 @@ Deno.serve(async (req: Request) => {
     if (fetchErr) throw fetchErr;
 
     if (!profilesToDelete?.length) {
-      return Response.json({ ok: true, deleted: 0, message: 'Aucun utilisateur à supprimer' }, { headers: corsHeaders });
+      return Response.json({ ok: true, deleted: 0, message: 'Aucun utilisateur à supprimer' }, { headers: cors });
     }
 
     const profileIds = profilesToDelete.map(p => p.id);
@@ -157,13 +158,13 @@ Deno.serve(async (req: Request) => {
       },
       errors: errors.length ? errors : undefined,
       message: `${deletedUsers} compte(s) supprimé(s). Vous pouvez maintenant importer la nouvelle liste.`,
-    }, { headers: corsHeaders });
+    }, { headers: cors });
 
   } catch (err) {
     console.error('purge-users error:', err);
     return Response.json(
       { error: 'Erreur serveur', detail: err instanceof Error ? err.message : String(err) },
-      { status: 500, headers: corsHeaders }
+      { status: 500, headers: cors }
     );
   }
 });

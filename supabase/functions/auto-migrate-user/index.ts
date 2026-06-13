@@ -15,7 +15,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
+import { getCorsHeaders } from '../_shared/cors.ts';
 
 // SHA-256 côté Deno (identique à crypto.subtle dans le browser)
 async function sha256(str: string): Promise<string> {
@@ -25,15 +25,16 @@ async function sha256(str: string): Promise<string> {
 }
 
 Deno.serve(async (req: Request) => {
+  const cors = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: cors });
   }
 
   try {
     const { username, password } = await req.json();
 
     if (!username || !password) {
-      return Response.json({ error: 'username et password requis' }, { status: 400, headers: corsHeaders });
+      return Response.json({ error: 'username et password requis' }, { status: 400, headers: cors });
     }
 
     // ── Client admin (service role, jamais exposé au client) ──
@@ -56,7 +57,7 @@ Deno.serve(async (req: Request) => {
       // Mauvais mot de passe OU utilisateur inexistant
       return Response.json(
         { error: 'Identifiant ou mot de passe incorrect.' },
-        { status: 401, headers: corsHeaders }
+        { status: 401, headers: cors }
       );
     }
 
@@ -76,7 +77,7 @@ Deno.serve(async (req: Request) => {
 
       if (createErr) {
         console.error('Erreur création Auth user:', createErr);
-        return Response.json({ error: 'Erreur lors de la migration du compte.' }, { status: 500, headers: corsHeaders });
+        return Response.json({ error: 'Erreur lors de la migration du compte.' }, { status: 500, headers: cors });
       }
 
       // ── 4. Créer sh_user_profiles ────────────────────────────
@@ -95,7 +96,7 @@ Deno.serve(async (req: Request) => {
         console.error('Erreur création profil:', profileErr);
         // Nettoyage : supprimer le compte Auth créé
         await sbAdmin.auth.admin.deleteUser(newAuthUser.user.id);
-        return Response.json({ error: 'Erreur lors de la création du profil.' }, { status: 500, headers: corsHeaders });
+        return Response.json({ error: 'Erreur lors de la création du profil.' }, { status: 500, headers: cors });
       }
     }
 
@@ -112,7 +113,7 @@ Deno.serve(async (req: Request) => {
     });
 
     if (signInErr || !signInData?.session) {
-      return Response.json({ error: 'Erreur lors de la connexion après migration.' }, { status: 500, headers: corsHeaders });
+      return Response.json({ error: 'Erreur lors de la connexion après migration.' }, { status: 500, headers: cors });
     }
 
     // ── 6. Retourner le profil + la session ───────────────────
@@ -127,13 +128,13 @@ Deno.serve(async (req: Request) => {
       migrated: !alreadyExists,
       session: signInData.session,
       profile,
-    }, { headers: corsHeaders });
+    }, { headers: cors });
 
   } catch (err) {
     console.error('auto-migrate-user error:', err);
     return Response.json(
       { error: 'Erreur serveur', detail: err instanceof Error ? err.message : String(err) },
-      { status: 500, headers: corsHeaders }
+      { status: 500, headers: cors }
     );
   }
 });

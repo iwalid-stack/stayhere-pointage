@@ -20,7 +20,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
+import { getCorsHeaders } from '../_shared/cors.ts';
 
 // ── Helpers timezone Maroc ──────────────────────────────────
 function nowMaroc(): string {
@@ -61,14 +61,15 @@ function yesterdayMaroc(): string {
 
 // ── Handler ─────────────────────────────────────────────────
 Deno.serve(async (req: Request) => {
+  const cors = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: cors });
   }
 
   try {
     const authHeader = req.headers.get('Authorization') || '';
     if (!authHeader.startsWith('Bearer ')) {
-      return Response.json({ error: 'Non autorisé' }, { status: 401, headers: corsHeaders });
+      return Response.json({ error: 'Non autorisé' }, { status: 401, headers: cors });
     }
 
     const sbAdmin = createClient(
@@ -92,7 +93,7 @@ Deno.serve(async (req: Request) => {
     if (fetchErr) throw fetchErr;
 
     if (!openShifts || openShifts.length === 0) {
-      return Response.json({ ok: true, closed: 0, skipped: 0, message: 'Aucun shift ouvert à clôturer' }, { headers: corsHeaders });
+      return Response.json({ ok: true, closed: 0, skipped: 0, message: 'Aucun shift ouvert à clôturer' }, { headers: cors });
     }
 
     const results = [];
@@ -141,13 +142,13 @@ Deno.serve(async (req: Request) => {
     const skipped = results.filter(r => r.status === 'skipped').length;
     const errors  = results.filter(r => r.status === 'error').length;
 
-    return Response.json({ ok: true, closed, skipped, errors, total: openShifts.length, details: results }, { headers: corsHeaders });
+    return Response.json({ ok: true, closed, skipped, errors, total: openShifts.length, details: results }, { headers: cors });
 
   } catch (err) {
     console.error('auto-close-shifts error:', err);
     return Response.json(
       { error: 'Erreur serveur', detail: err instanceof Error ? err.message : String(err) },
-      { status: 500, headers: corsHeaders }
+      { status: 500, headers: cors }
     );
   }
 });

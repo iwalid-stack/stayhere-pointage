@@ -15,7 +15,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
+import { getCorsHeaders } from '../_shared/cors.ts';
 
 // ── Haversine (côté serveur) ────────────────────────────────
 function haversineDistance(
@@ -73,17 +73,18 @@ function isInShiftWindow(currentTime: string, debut: string, fin: string): boole
 
 // ── Handler principal ───────────────────────────────────────
 Deno.serve(async (req: Request) => {
+  const cors = getCorsHeaders(req);
 
   // CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: cors });
   }
 
   try {
     // ── 1. Authentification JWT ──────────────────────────────
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return Response.json({ error: 'Non authentifié' }, { status: 401, headers: corsHeaders });
+      return Response.json({ error: 'Non authentifié' }, { status: 401, headers: cors });
     }
     const userToken = authHeader.replace('Bearer ', '');
 
@@ -103,7 +104,7 @@ Deno.serve(async (req: Request) => {
     // Vérifier que le token est valide
     const { data: { user }, error: authError } = await sbUser.auth.getUser();
     if (authError || !user) {
-      return Response.json({ error: 'Token invalide' }, { status: 401, headers: corsHeaders });
+      return Response.json({ error: 'Token invalide' }, { status: 401, headers: cors });
     }
 
     // ── 2. Récupérer le profil utilisateur ───────────────────
@@ -114,16 +115,16 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (profError || !profile) {
-      return Response.json({ error: 'Profil utilisateur introuvable' }, { status: 403, headers: corsHeaders });
+      return Response.json({ error: 'Profil utilisateur introuvable' }, { status: 403, headers: cors });
     }
 
     if (!profile.acces_horloge) {
-      return Response.json({ error: 'Accès à l\'horloge non autorisé' }, { status: 403, headers: corsHeaders });
+      return Response.json({ error: 'Accès à l\'horloge non autorisé' }, { status: 403, headers: cors });
     }
 
     const empId = profile.employee_id;
     if (!empId) {
-      return Response.json({ error: 'Aucun employé lié à ce compte' }, { status: 403, headers: corsHeaders });
+      return Response.json({ error: 'Aucun employé lié à ce compte' }, { status: 403, headers: cors });
     }
 
     // ── 3. Parser le body de la requête ─────────────────────
@@ -131,7 +132,7 @@ Deno.serve(async (req: Request) => {
     const { action, latitude, longitude } = body;
 
     if (!['start', 'stop', 'pause', 'resume'].includes(action)) {
-      return Response.json({ error: 'Action invalide' }, { status: 400, headers: corsHeaders });
+      return Response.json({ error: 'Action invalide' }, { status: 400, headers: cors });
     }
 
     // ── 4. Récupérer le site effectif (avec détachement temp) ─
@@ -154,7 +155,7 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (!employee) {
-      return Response.json({ error: 'Employé introuvable' }, { status: 404, headers: corsHeaders });
+      return Response.json({ error: 'Employé introuvable' }, { status: 404, headers: cors });
     }
 
     const effectiveSiteId = tempAssign?.site_id_temp ?? employee.site_id;
@@ -170,7 +171,7 @@ Deno.serve(async (req: Request) => {
     if (planning?.type === 'off') {
       return Response.json(
         { error: 'Jour de repos — pointage impossible' },
-        { status: 403, headers: corsHeaders }
+        { status: 403, headers: cors }
       );
     }
 
@@ -190,7 +191,7 @@ Deno.serve(async (req: Request) => {
       if (weeklyEntry?.is_off) {
         return Response.json(
           { error: 'Jour de repos selon votre planning. Pointage impossible.' },
-          { status: 403, headers: corsHeaders }
+          { status: 403, headers: cors }
         );
       }
 
@@ -210,7 +211,7 @@ Deno.serve(async (req: Request) => {
               {
                 error: `Hors de votre fenêtre de pointage. Shift ${shiftType.nom} : ${shiftType.heure_debut}–${finLabel}. Vous pouvez pointer à partir de ${String(Math.floor((timeToMin(shiftType.heure_debut) - 30) / 60) % 24).padStart(2,'0')}:${String((timeToMin(shiftType.heure_debut) - 30) % 60).padStart(2,'0')}.`,
               },
-              { status: 403, headers: corsHeaders }
+              { status: 403, headers: cors }
             );
           }
           rotationShiftDebut = shiftType.heure_debut;
@@ -235,7 +236,7 @@ Deno.serve(async (req: Request) => {
           if (!isInShiftWindow(currentTime, debut, fin)) {
             return Response.json(
               { error: `Hors de votre fenêtre de pointage. Shift prévu : ${debut}–${fin}.` },
-              { status: 403, headers: corsHeaders }
+              { status: 403, headers: cors }
             );
           }
           rotationShiftDebut = debut;
@@ -243,7 +244,7 @@ Deno.serve(async (req: Request) => {
         } else {
           return Response.json(
             { error: 'Aucun shift programmé pour aujourd\'hui. Contactez votre responsable.' },
-            { status: 403, headers: corsHeaders }
+            { status: 403, headers: cors }
           );
         }
       }
@@ -271,7 +272,7 @@ Deno.serve(async (req: Request) => {
         if (latitude == null || longitude == null) {
           return Response.json(
             { error: 'Position GPS requise pour pointer' },
-            { status: 400, headers: corsHeaders }
+            { status: 400, headers: cors }
           );
         }
 
@@ -317,7 +318,7 @@ Deno.serve(async (req: Request) => {
             : `Vous êtes à ${Math.round(minDist)}m de votre site. Rapprochez-vous à moins de ${minRadius}m pour pointer.`;
           return Response.json(
             { error: msg, distanceMeters: Math.round(minDist), radiusMeters: minRadius },
-            { status: 403, headers: corsHeaders }
+            { status: 403, headers: cors }
           );
         }
 
@@ -417,7 +418,7 @@ Deno.serve(async (req: Request) => {
 
     if (action === 'start') {
       if (existingShift?.heure_arrivee) {
-        return Response.json({ error: 'Shift déjà démarré' }, { status: 409, headers: corsHeaders });
+        return Response.json({ error: 'Shift déjà démarré' }, { status: 409, headers: cors });
       }
 
       // Utiliser le site GPS validé si disponible, sinon le site effectif (détachement ou principal)
@@ -449,7 +450,7 @@ Deno.serve(async (req: Request) => {
 
     } else if (action === 'stop') {
       if (!existingShift?.heure_arrivee) {
-        return Response.json({ error: 'Aucun shift en cours' }, { status: 409, headers: corsHeaders });
+        return Response.json({ error: 'Aucun shift en cours' }, { status: 409, headers: cors });
       }
 
       // Calculer durée en minutes
@@ -485,7 +486,7 @@ Deno.serve(async (req: Request) => {
 
     } else if (action === 'pause') {
       if (!existingShift?.heure_arrivee || existingShift?.heure_depart) {
-        return Response.json({ error: 'Impossible de mettre en pause' }, { status: 409, headers: corsHeaders });
+        return Response.json({ error: 'Impossible de mettre en pause' }, { status: 409, headers: cors });
       }
 
       // Stocker l'heure de début de pause dans updated_at (réutilisé temporairement)
@@ -505,7 +506,7 @@ Deno.serve(async (req: Request) => {
 
     } else { // resume
       if (!existingShift) {
-        return Response.json({ error: 'Aucun shift en cours' }, { status: 409, headers: corsHeaders });
+        return Response.json({ error: 'Aucun shift en cours' }, { status: 409, headers: cors });
       }
 
       // Calculer durée de pause
@@ -533,13 +534,13 @@ Deno.serve(async (req: Request) => {
       result = { shift: data, serverTime, pauseMinutes: (existingShift.pause_minutes || 0) + pauseAdd };
     }
 
-    return Response.json({ ok: true, ...result }, { headers: corsHeaders });
+    return Response.json({ ok: true, ...result }, { headers: cors });
 
   } catch (err) {
     console.error('clock-action error:', err);
     return Response.json(
       { error: 'Erreur serveur', detail: err instanceof Error ? err.message : String(err) },
-      { status: 500, headers: corsHeaders }
+      { status: 500, headers: cors }
     );
   }
 });

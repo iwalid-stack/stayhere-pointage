@@ -11,7 +11,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
+import { getCorsHeaders } from '../_shared/cors.ts';
 
 // SHA-256 côté Deno
 async function sha256(str: string): Promise<string> {
@@ -21,15 +21,16 @@ async function sha256(str: string): Promise<string> {
 }
 
 Deno.serve(async (req: Request) => {
+  const cors = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: cors });
   }
 
   try {
     // ── 1. Vérifier que l'appelant est authentifié ────────────
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return Response.json({ error: 'Non authentifié' }, { status: 401, headers: corsHeaders });
+      return Response.json({ error: 'Non authentifié' }, { status: 401, headers: cors });
     }
     const userToken = authHeader.replace('Bearer ', '');
 
@@ -41,7 +42,7 @@ Deno.serve(async (req: Request) => {
     // Vérifier le token de l'appelant
     const { data: { user: caller }, error: authErr } = await sbAdmin.auth.getUser(userToken);
     if (authErr || !caller) {
-      return Response.json({ error: 'Token invalide' }, { status: 401, headers: corsHeaders });
+      return Response.json({ error: 'Token invalide' }, { status: 401, headers: cors });
     }
 
     // ── 2. Vérifier que l'appelant est cluster_ops ─────────────
@@ -52,7 +53,7 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (callerProfile?.role !== 'cluster_ops') {
-      return Response.json({ error: 'Accès refusé — rôle cluster_ops requis' }, { status: 403, headers: corsHeaders });
+      return Response.json({ error: 'Accès refusé — rôle cluster_ops requis' }, { status: 403, headers: cors });
     }
 
     // ── 3. Parser la requête ──────────────────────────────────
@@ -69,7 +70,7 @@ Deno.serve(async (req: Request) => {
     } = await req.json();
 
     if (!username || !password || !nom) {
-      return Response.json({ error: 'username, password et nom requis' }, { status: 400, headers: corsHeaders });
+      return Response.json({ error: 'username, password et nom requis' }, { status: 400, headers: cors });
     }
 
     const email = username.toLowerCase() + '@stayhere.internal';
@@ -95,7 +96,7 @@ Deno.serve(async (req: Request) => {
 
       if (createErr) {
         console.error('Erreur création Auth:', createErr);
-        return Response.json({ error: 'Erreur création compte Auth: ' + createErr.message }, { status: 500, headers: corsHeaders });
+        return Response.json({ error: 'Erreur création compte Auth: ' + createErr.message }, { status: 500, headers: cors });
       }
       authUserId = newUser.user.id;
     }
@@ -116,7 +117,7 @@ Deno.serve(async (req: Request) => {
       console.error('Erreur profil:', profileErr);
       // Nettoyer si c'est un nouveau compte
       if (!existingUser) await sbAdmin.auth.admin.deleteUser(authUserId);
-      return Response.json({ error: 'Erreur création profil: ' + profileErr.message }, { status: 500, headers: corsHeaders });
+      return Response.json({ error: 'Erreur création profil: ' + profileErr.message }, { status: 500, headers: cors });
     }
 
     // ── 7. Insérer / mettre à jour sh_users (legacy) ──────────
@@ -140,13 +141,13 @@ Deno.serve(async (req: Request) => {
       ok: true,
       user_id: authUserId,
       created: !existingUser,
-    }, { headers: corsHeaders });
+    }, { headers: cors });
 
   } catch (err) {
     console.error('create-user error:', err);
     return Response.json(
       { error: 'Erreur serveur', detail: err instanceof Error ? err.message : String(err) },
-      { status: 500, headers: corsHeaders }
+      { status: 500, headers: cors }
     );
   }
 });

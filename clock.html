@@ -183,6 +183,7 @@ let todayPointage = null; // entrée sh_pointage pour aujourd'hui (type: travail
 const DAY_FR = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
 const MON_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 
+function escapeHtml(s) { const d=document.createElement('div'); d.textContent=String(s||''); return d.innerHTML; }
 function pad2(n) { return String(n).padStart(2,'0'); }
 function uid() { return Date.now().toString(36)+Math.random().toString(36).substr(2,5); }
 function nowISO() { return new Date().toISOString(); }
@@ -376,7 +377,8 @@ const ClockApp = {
 
     try {
       const {createClient} = window.supabase;
-      SB = createClient(SB_URL, SB_KEY);
+      // sessionStorage : tokens non persistés entre onglets, protège contre le vol via XSS
+      SB = createClient(SB_URL, SB_KEY, { auth: { storage: window.sessionStorage, detectSessionInUrl: false } });
     } catch(e) {
       this.showError('Erreur de chargement. Vérifiez votre connexion internet.', e.message);
       return;
@@ -1016,9 +1018,9 @@ const ClockApp = {
           </div>
           <div class="leave-dates">${fmtDateFR(r.date_debut)} → ${fmtDateFR(r.date_fin)}</div>
           <div class="leave-meta">${r.nb_jours} jour${r.nb_jours>1?'s':''} · Soumis le ${fmtDateFR(r.created_at)}</div>
-          ${r.notes?`<div class="leave-meta" style="margin-top:3px;font-style:italic">${r.notes}</div>`:''}
-          ${r.status==='rejected'&&r.rejection_reason?`<div class="leave-meta" style="color:#ff7b72;margin-top:4px">Refus : ${r.rejection_reason}</div>`:''}
-          ${r.status==='approved'?(r.ka_notes?`<div class="leave-meta" style="color:#66bb6a;margin-top:2px">KA : ${r.ka_notes}</div>`:'')+`<div class="leave-meta" style="color:#66bb6a;margin-top:2px">Validé par ${r.validated_by_admin||'admin'}</div>`:''}
+          ${r.notes?`<div class="leave-meta" style="margin-top:3px;font-style:italic">${escapeHtml(r.notes)}</div>`:''}
+          ${r.status==='rejected'&&r.rejection_reason?`<div class="leave-meta" style="color:#ff7b72;margin-top:4px">Refus : ${escapeHtml(r.rejection_reason)}</div>`:''}
+          ${r.status==='approved'?(r.ka_notes?`<div class="leave-meta" style="color:#66bb6a;margin-top:2px">KA : ${escapeHtml(r.ka_notes)}</div>`:'')+`<div class="leave-meta" style="color:#66bb6a;margin-top:2px">Validé par ${escapeHtml(r.validated_by_admin||'admin')}</div>`:''}
         </div>`).join('');
     return `<div class="conges-body">
       <div class="balance-cards">
