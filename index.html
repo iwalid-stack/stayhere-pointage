@@ -2449,9 +2449,18 @@ const App = {
     if (Date.now()-lastRun < 30*60*1000) return;
     localStorage.setItem(cacheKey, Date.now());
 
-    const allEmps = DB.getEmployees().filter(e=>e.actif);
+    // Scope selon le rôle : les non-admins ne traitent que leur propre site
+    const canSeeAll = ['admin','cluster_ops_manager','rh'].includes(currentSession?.role);
+    const allEmps = DB.getEmployees().filter(e=>{
+      if(!e.actif) return false;
+      if(!canSeeAll) return e.site_id===currentSession?.site_id;
+      return true;
+    });
     const todayEntries = (Cache.pointage||[]).filter(p=>p.date===today);
     const todayShifts  = (Cache.shifts||[]).filter(s=>s.date===today);
+
+    // Session système : les absences auto ne sont pas attribuées à l'utilisateur connecté
+    const autoSession = { username: 'auto_système' };
 
     let count = 0;
     for (const emp of allEmps) {
@@ -2475,7 +2484,7 @@ const App = {
       if (nowMin < ph*60+pm+ABSENCE_DELAY_MIN) continue;
 
       try {
-        await DB.setPointage(emp.id, today, 'absence', 'Absence auto – non pointé (2h)', currentSession, emp.site_id);
+        await DB.setPointage(emp.id, today, 'absence', 'Absence auto – non pointé (2h)', autoSession, emp.site_id);
         count++;
       } catch(e) { console.warn('autoMarkAbsences emp', emp.id, e); }
     }
