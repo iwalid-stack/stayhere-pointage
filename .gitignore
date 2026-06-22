@@ -21,3 +21,4 @@ npm-debug.log*
 
 # Credentials Supabase — NE JAMAIS COMMITTER
 config.js
+.vercel

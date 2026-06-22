@@ -2434,8 +2434,7 @@ const App = {
         </div>
       </div>
     </div>`;
-    // Marquer automatiquement les absences en arrière-plan (throttlé à 30 min)
-    this.autoMarkAbsences().catch(e=>console.warn('autoMarkAbsences:',e));
+    // Auto-absence gérée côté serveur (Edge Function auto-absence + pg_cron)
   },
 
   async autoMarkAbsences() {
